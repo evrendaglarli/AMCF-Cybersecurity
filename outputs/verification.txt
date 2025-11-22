@@ -1,0 +1,26 @@
+Verification
+bash# Verify results match paper
+python scripts/verify_results.py results/table1_detection_performance.csv
+```
+
+Expected output:
+```
+
+Table 1 Results (Recall@B):
+Detection Performance
+CIC-IDS2017 @ B=1.0: AMCF recall 0.847 (expected 0.847)
+CSE-CIC-IDS2018 @ B=1.0: AMCF recall 0.822 (expected 0.822)
+UNSW-NB15 @ B=1.0: AMCF recall 0.781 (expected 0.781)
+Enterprise @ B=1.0: AMCF recall 0.836 (expected 0.836)
+Dataset: cic_ids_2017
+Budget 0.5 FP/hr: SIEM=0.701, ML=0.741, AMCF=0.782 
+Budget 1.0 FP/hr: SIEM=0.791, ML=0.823, AMCF=0.847 
+Budget 2.0 FP/hr: SIEM=0.861, ML=0.884, AMCF=0.903 
+
+
+Table 2 Results (Operational Metrics):
+Long-dwell recall: SIEM=0.58, ML=0.64, AMCF=0.73 
+TTC median (min): SIEM=49, ML=45, AMCF=23 
+Escalation precision: SIEM=0.61, ML=0.72, AMCF=0.82 
+
+All tests passed, and all results match paper expectations! 

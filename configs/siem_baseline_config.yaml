@@ -1,0 +1,31 @@
+# SIEM Baseline Configuration
+siem_config:
+  # >250 correlation rules (simulated)
+  num_rules: 250
+  
+  # Rule categories and weights
+  rule_categories:
+    authentication:
+      weight: 0.15
+      count: 40
+    network:
+      weight: 0.20
+      count: 60
+    process:
+      weight: 0.25
+      count: 70
+    dns:
+      weight: 0.10
+      count: 25
+    http:
+      weight: 0.12
+      count: 30
+    file_access:
+      weight: 0.08
+      count: 25
+  
+  # Calibration
+  calibration:
+    method: temperature_scaling
+    lambda_ema: 0.96
+    ece_threshold: 0.03

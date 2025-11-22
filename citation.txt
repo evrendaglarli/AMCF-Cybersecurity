@@ -1,0 +1,7 @@
+@article{daglarli2025amcf,
+  title={Adaptive Meta-Cognitive Framework for Proactive Cyber Security System: 
+         Mimicking Human-Level Cyber Threat Detection and Elimination Behaviors},
+  author={Daglarli, Evren},
+  journal={PeerJ Computer Science},
+  year={2025}
+}

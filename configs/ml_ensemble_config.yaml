@@ -1,0 +1,26 @@
+# ML Ensemble Baseline Configuration
+ml_config:
+  detectors:
+    - lightgbm
+    - tcn
+    - isolation_forest
+  
+  meta_learner: logistic_regression
+  
+  # Individual detector configs
+  lightgbm:
+    num_leaves: 31
+    learning_rate: 0.05
+    feature_fraction: 0.9
+    bagging_fraction: 0.8
+  
+  tcn:
+    input_dim: 50
+    hidden_dim: 64
+    num_layers: 3
+    dropout: 0.2
+    epochs: 50
+  
+  isolation_forest:
+    contamination: 0.05
+    random_state: 42

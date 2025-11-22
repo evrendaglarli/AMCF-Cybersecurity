@@ -1,0 +1,60 @@
+# AMCF Configuration
+amcf_config:
+  working_memory_size: 500
+  min_working_memory_size: 100
+  embedding_dim: 768
+  
+  # Safety parameters
+  rho_max: 0.75
+  epsilon: 0.001
+  alpha: 0.001
+  
+  # Enrichment
+  enrichment_budget: 100.0
+  
+  # VoI estimation
+  voi_estimation:
+    N_min: 64
+    N_max: 4096
+    tolerance: 0.02
+    wall_clock_budget_ms: 150
+
+# Cost model (Bayes risk)
+cost_model:
+  C_FP: 1.0
+  C_FN_low: 5.0
+  C_FN_med: 15.0
+  C_FN_high: 50.0
+  C_auto: 2.5
+  C_SE: 1.2
+  c_triage: 3.0
+  lambda_delay: 0.5
+  lambda_queue: 0.3
+
+# Calibration
+calibration:
+  temperature_update_frequency: 200
+  lambda_ema: 0.96
+  learning_rate: 0.01
+  
+  drift_detection:
+    psi_threshold: 0.25
+    ece_threshold: 0.03
+    ks_threshold: 0.12
+
+# Detectors
+detectors:
+  lightgbm:
+    num_leaves: 31
+    learning_rate: 0.05
+    feature_fraction: 0.9
+  
+  tcn:
+    input_dim: 50
+    hidden_dim: 64
+    num_layers: 3
+    epochs: 50
+  
+  isolation_forest:
+    contamination: 0.05
+    random_state: 42

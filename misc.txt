@@ -1,0 +1,6 @@
+# All experiments use fixed random seeds for determinism
+
+export PYTHONHASHSEED=0
+export NUMPY_RANDOM_SEED=42
+
+python experiments/run_experiments.py
