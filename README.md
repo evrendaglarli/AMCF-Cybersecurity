@@ -169,6 +169,11 @@ Edit `configs/amcf_config.yaml` to adjust:
 
 All datasets are automatically generated/loaded. No external downloads required.
 
+Data Availability Statement:
+All source code, configuration files, and scripts required to reproduce the reported experiments are publicly available at: https://github.com/evrendaglarli/AMCF-Cybersecurity
+. The repository also provides preprocessed versions or loaders for the public intrusion detection datasets used in this work (CIC-IDS2017, CSE-CIC-IDS2018, UNSW-NB15), as well as a 60-day synthetic enterprise telemetry corpus that matches the schema and approximate statistics of the original Security Operations Center (SOC) data.
+The original enterprise SOC logs (≈4.7×10^8 events) cannot be shared due to contractual data-governance and confidentiality agreements with the collaborating organization. These constraints only affect the raw enterprise stream; all analysis logic, evaluation code, and synthetic approximations are fully available in the public repository.
+
 ## Citation
 ```bibtex
 @article{daglarli2025amcf,
