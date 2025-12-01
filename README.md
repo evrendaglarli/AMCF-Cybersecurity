@@ -1,6 +1,6 @@
 # AMCF: Adaptive Metacognitive Framework for Proactive Cyber Security
 
-Official implementation of **"Adaptive Meta-Cognitive Framework for Proactive Cyber Security System: Mimicking Human-Level Cyber Threat Detection and Elimination Behaviors"** submitted to Big Data and Cognitive Computing.
+Official implementation of "Adaptive Meta-Cognitive Framework for Proactive Cyber Security System: Mimicking Human-Level Cyber Threat Detection and Elimination Behaviors".
 
 ## Overview
 
