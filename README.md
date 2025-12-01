@@ -73,10 +73,15 @@ bash# Reproduce all results (Tables 1, 2, 3 and ablation study)
 
 # Setup
 git clone https://github.com/evrendaglarli/AMCF-Cybersecurity.git
+
 cd AMCF-Cybersecurity
+
 python -m venv venv
+
 source venv/bin/activate  # Windows için: venv\Scripts\activate
+
 pip install -r requirements.txt
+
 pip install -e .
 
 # Run all experiments
