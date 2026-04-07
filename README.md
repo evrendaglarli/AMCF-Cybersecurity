@@ -185,6 +185,7 @@ The original enterprise SOC logs (≈4.7×10^8 events) cannot be shared due to c
   title={Adaptive Meta-Cognitive Framework for Proactive Cyber Security System},
   author={Daglarli, Evren},
   journal={},
+  doi={10.5281/zenodo.19448557}
   year={2025}
 }
 ```
