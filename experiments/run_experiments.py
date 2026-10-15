@@ -60,8 +60,12 @@ class ExperimentRunner:
         data_path = Path('data/processed') / f'{dataset_name}.pkl'
         
         if not data_path.exists():
-            print(f"  Generating synthetic {dataset_name} dataset...")
-            return self._generate_synthetic_data(dataset_name)
+            raise FileNotFoundError(
+                f"Real preprocessed dataset not found: {data_path}. "
+                "R14 scientific audit forbids silently substituting synthetic data "
+                "for published benchmark experiments. Obtain and verify original "
+                "dataset splits before proceeding."
+            )
         
         print(f"  Loading {dataset_name}...")
         with open(data_path, 'rb') as f:
@@ -449,8 +453,8 @@ def main():
     print("\nResults saved to:")
     print("  - results/tables/table1_detection_performance.csv") 
     print("  - results/tables/table2_operational_metrics.csv")
-          print("  - results/tables/table3_calibration.csv")
-          print("="*80 + "\n")
+    print("  - results/tables/table3_calibration.csv")
+    print("="*80 + "\n")
 
 
 if __name__ == '__main__':
