@@ -1,66 +1,52 @@
-# AMCF Datasets
+# Data provenance and evaluation inputs
 
-## Structure
+## What this repository includes
 
-- `raw/` - Original datasets (placeholder)
-- `processed/` - Preprocessed feature matrices and events
-- `synthetic/` - Synthetically generated data for testing
+- `data/synthetic/generate_synthetic_data.py` generates **random demonstration samples**, not the original CIC-IDS2017, CSE-CIC-IDS2018, UNSW-NB15, or enterprise SOC records.
+- The main experiment runner can also generate temporary synthetic demonstration samples only when `--synthetic-demo` is explicitly supplied.
+- Neither of these random-data generators reconstructs the temporal attack chains, true labels, feature correlations, split protocol, or security operations data described in the manuscript.
 
-## Datasets
+## What is not included
 
-### Public Datasets
-- **CIC-IDS2017**: 10,000 events, ~5% positive
-- **CSE-CIC-IDS2018**: 12,000 events, ~4% positive
-- **UNSW-NB15**: 8,000 events, ~6% positive
+The named public benchmark datasets and verified preprocessed versions are **not currently committed** to this repository. The original enterprise SOC telemetry is confidential and is also **not committed**. No verified automatic download/preprocessing pipeline for those datasets is included here.
 
-### Enterprise Corpus
-- **enterprise_60day**: 25,000 events sampled from 60-day corpus
-- Statistics: 100 endpoints, 50 users, ~5% malicious events
+Therefore, **this repository alone cannot currently reproduce the published paper's dataset-based numerical findings.** Do not mistake demonstration output for the manuscript's empirical evidence.
 
-## File Format
+## Inputs expected by the reference runner
 
-All datasets are saved as pickle files containing:
+Verified, locally prepared datasets are expected under:
+
+```text
+data/processed/cic_ids_2017.pkl
+data/processed/cse_ids_2018.pkl
+data/processed/unsw_nb15.pkl
+data/processed/enterprise.pkl
+```
+
+The legacy runner expects a trusted Python pickle of the form:
+
 ```python
 (X_train, y_train, X_val, y_val, X_test, y_test, events_test)
 ```
 
-- `X_*`: Feature matrices (shape: n_samples × 50)
-- `y_*`: Binary labels (0 = benign, 1 = malicious)
-- `events_test`: List of Event objects with temporal information
+`X_*` denotes feature matrices; `y_*` binary labels; and `events_test` a sequence of event records. This is a code-level input contract, **not** evidence that a supplied file follows the manuscript's validated experiment protocol.
 
-## Generation
+Only load pickle files from trusted sources. Proper reproduction requires documented data origin, preprocessing, split boundaries, class counts, event-to-incident mapping, replay-clock rules, and causally available labels.
 
-Datasets are automatically generated on first run:
+## Running
+
+By default, missing prepared data cause a clear error:
+
 ```bash
 python experiments/run_experiments.py
 ```
 
-Or manually:
+To *explicitly* exercise the reference runner with randomly generated examples:
+
 ```bash
-python data/synthetic/generate_synthetic_data.py
+python experiments/run_experiments.py --synthetic-demo
 ```
-```
 
----
+Synthetic runs use `results/demo/tables/` for outputs. They are illustrations only and must not be reported as benchmark or enterprise SOC results.
 
-## 15. LICENSE
-
-### `LICENSE`
-```
-MIT License
-
-Copyright (c) 2025 Evren Daglarli
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
-ANY KIND, either express or implied, including but not limited to the warranties
-of merchantability, fitness for a particular purpose and noninfringement.
+The separate `data/synthetic/generate_synthetic_data.py` program uses a small 50,000-event random dataset (12,500 test events). The runner's internal random generator uses other small sample sizes. These numbers do **not** represent the full 60-day enterprise corpus or a real sample extracted from it.
