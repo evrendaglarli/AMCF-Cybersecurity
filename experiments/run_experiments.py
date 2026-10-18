@@ -65,16 +65,17 @@ class ExperimentRunner:
         """
         data_path = Path('data/processed') / f'{dataset_name}.pkl'
         
-        if not data_path.exists():
-            if not self.allow_synthetic_demo:
-                raise FileNotFoundError(
-                    f"Missing prepared dataset: {data_path}. "
-                    "The repository does not download or bundle the public datasets. "
-                    "Supply the verified processed file, or use --synthetic-demo "
-                    "for random demonstration data (NOT paper reproduction)."
-                )
+        if self.allow_synthetic_demo:
             print(f"  [SYNTHETIC DEMO, NOT PAPER RESULTS] {dataset_name}")
             return self._generate_synthetic_data(dataset_name)
+
+        if not data_path.exists():
+            raise FileNotFoundError(
+                f"Missing prepared dataset: {data_path}. "
+                "The repository does not download or bundle the public datasets. "
+                "Supply verified processed files, or use --synthetic-demo "
+                "for random demonstration data (NOT paper reproduction)."
+            )
         
         print(f"  Loading {dataset_name}...")
         with open(data_path, 'rb') as f:
@@ -442,7 +443,7 @@ def main():
     runner = ExperimentRunner('configs/amcf_config.yaml',
                               allow_synthetic_demo=args.synthetic_demo)
     
-    # Run all experiments
+    # Run the three reference evaluation routines.
     start_time = time.time()
     
     # Table 1
