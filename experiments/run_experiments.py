@@ -1,8 +1,11 @@
 """
-Main evaluation script to reproduce paper results
-Generates Table 1, Table 2, Table 3
+AMCF reference evaluation runner.
+
+Prepared datasets are required by default. --synthetic-demo uses randomly
+simulated data for illustration only; it cannot reproduce manuscript results.
 """
 
+import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -30,9 +33,12 @@ from amcf.utils.visualization import (
 class ExperimentRunner:
     """Main experiment orchestration"""
     
-    def __init__(self, config_file: str = 'configs/amcf_config.yaml'):
+    def __init__(self, config_file: str = 'configs/amcf_config.yaml',
+                 allow_synthetic_demo: bool = False):
         """Initialize experiment runner"""
         self.config_file = config_file
+        self.allow_synthetic_demo = allow_synthetic_demo
+        self.tables_dir = Path('results/demo/tables' if allow_synthetic_demo else 'results/tables')
         
         if Path(config_file).exists():
             with open(config_file, 'r') as f:
@@ -45,7 +51,7 @@ class ExperimentRunner:
         # Create output directories
         Path('results').mkdir(exist_ok=True)
         Path('results/figures').mkdir(exist_ok=True)
-        Path('results/tables').mkdir(exist_ok=True)
+        self.tables_dir.mkdir(parents=True, exist_ok=True)
     
     def load_dataset(self, dataset_name: str) -> Tuple:
         """
@@ -60,7 +66,14 @@ class ExperimentRunner:
         data_path = Path('data/processed') / f'{dataset_name}.pkl'
         
         if not data_path.exists():
-            print(f"  Generating synthetic {dataset_name} dataset...")
+            if not self.allow_synthetic_demo:
+                raise FileNotFoundError(
+                    f"Missing prepared dataset: {data_path}. "
+                    "The repository does not download or bundle the public datasets. "
+                    "Supply the verified processed file, or use --synthetic-demo "
+                    "for random demonstration data (NOT paper reproduction)."
+                )
+            print(f"  [SYNTHETIC DEMO, NOT PAPER RESULTS] {dataset_name}")
             return self._generate_synthetic_data(dataset_name)
         
         print(f"  Loading {dataset_name}...")
@@ -163,10 +176,10 @@ class ExperimentRunner:
                 print(f"    AMCF:  {amcf_recall:.4f} [{amcf_ci[0]:.4f}, {amcf_ci[1]:.4f}]")
         
         results_df = pd.DataFrame(results)
-        results_df.to_csv('results/tables/table1_detection_performance.csv', index=False)
+        results_df.to_csv(self.tables_dir / 'table1_detection_performance.csv', index=False)
         
         print("\n" + "="*80)
-        print("Table 1 saved to results/tables/table1_detection_performance.csv")
+        print(f"Table 1 saved to {self.tables_dir / 'table1_detection_performance.csv'}")
         print("="*80)
         
         return results_df
@@ -266,10 +279,10 @@ class ExperimentRunner:
             print(f"  Escalation precision: SIEM={siem_prec:.3f}, ML={ml_prec:.3f}, AMCF={amcf_prec:.3f}")
         
         results_df = pd.DataFrame(results)
-        results_df.to_csv('results/tables/table2_operational_metrics.csv', index=False)
+        results_df.to_csv(self.tables_dir / 'table2_operational_metrics.csv', index=False)
         
         print("\n" + "="*80)
-        print("Table 2 saved to results/tables/table2_operational_metrics.csv")
+        print(f"Table 2 saved to {self.tables_dir / 'table2_operational_metrics.csv'}")
         print("="*80)
         
         return results_df
@@ -347,16 +360,16 @@ class ExperimentRunner:
             print(f"  ECE: SIEM={siem_ece:.4f}, ML={ml_ece:.4f}, AMCF={amcf_ece:.4f}")
         
         results_df = pd.DataFrame(results)
-        results_df.to_csv('results/tables/table3_calibration.csv', index=False)
+        results_df.to_csv(self.tables_dir / 'table3_calibration.csv', index=False)
         
         print("\n" + "="*80)
-        print("Table 3 saved to results/tables/table3_calibration.csv")
+        print(f"Table 3 saved to {self.tables_dir / 'table3_calibration.csv'}")
         print("="*80)
         
         return results_df
     
     def _generate_synthetic_data(self, dataset_name: str) -> Tuple:
-        """Generate synthetic test data matching paper statistics"""
+        """Generate random illustration-only events, not real benchmark/SOC data."""
         
         # Dataset sizes
         if dataset_name == 'cic_ids_2017':
@@ -414,12 +427,20 @@ class ExperimentRunner:
 
 def main():
     """Main entry point"""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        '--synthetic-demo', action='store_true',
+        help='Use random synthetic data for missing inputs. Results are demonstrations only.'
+    )
+    args = parser.parse_args()
     print("\n" + "="*80)
     print("AMCF: ADAPTIVE METACOGNITIVE FRAMEWORK")
-    print("Complete Paper Reproduction")
+    print("SYNTHETIC DATA DEMONSTRATION - NOT PAPER REPRODUCTION" if args.synthetic_demo
+          else "PREPARED DATASET EVALUATION - NOT INDEPENDENTLY VERIFIED")
     print("="*80)
     
-    runner = ExperimentRunner('configs/amcf_config.yaml')
+    runner = ExperimentRunner('configs/amcf_config.yaml',
+                              allow_synthetic_demo=args.synthetic_demo)
     
     # Run all experiments
     start_time = time.time()
@@ -447,10 +468,10 @@ def main():
     print("="*80)
     print(f"Total runtime: {elapsed/60:.1f} minutes")
     print("\nResults saved to:")
-    print("  - results/tables/table1_detection_performance.csv") 
-    print("  - results/tables/table2_operational_metrics.csv")
-          print("  - results/tables/table3_calibration.csv")
-          print("="*80 + "\n")
+    print(f"  - {runner.tables_dir / 'table1_detection_performance.csv'}")
+    print(f"  - {runner.tables_dir / 'table2_operational_metrics.csv'}")
+    print(f"  - {runner.tables_dir / 'table3_calibration.csv'}")
+    print("="*80 + "\n")
 
 
 if __name__ == '__main__':
