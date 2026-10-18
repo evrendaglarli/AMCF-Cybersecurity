@@ -58,7 +58,7 @@ The runner requires these files and raises `FileNotFoundError` if they are missi
 python experiments/run_experiments.py --synthetic-demo
 ```
 
-When prepared inputs are absent, this **explicitly** generates random synthetic illustrations. Its output tables are written separately under `results/demo/tables/` rather than `results/tables/`. If prepared files exist, the runner loads them even with the flag enabled; do not mix these modes when reporting results.
+This mode **always** generates random synthetic illustrations (even if prepared input files exist). Its output tables are written separately under `results/demo/tables/` rather than `results/tables/`. The two modes cannot silently mix.
 
 The synthetic generator assigns random features, labels, timestamps, and detector scores. It is suitable only for development and illustrative execution, **not** for measuring real-world detection performance, safety, or calibration. No claims about research reproducibility or actual performance follow from successful execution of this command.
 
