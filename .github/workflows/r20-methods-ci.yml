@@ -26,6 +26,8 @@ jobs:
         run: python -m compileall -q amcf experiments tests setup.py
       - name: Run R20 method regressions
         run: python -m unittest discover -s tests -p 'test_r20_method_contracts.py' -v
+      - name: Check safe controller method integration without external connectors
+        run: python -m unittest discover -s tests -p 'test_r20_controller_contracts.py' -v
       - name: Verify scientific limitations remain explicit
         run: |
           python - <<'PY'
