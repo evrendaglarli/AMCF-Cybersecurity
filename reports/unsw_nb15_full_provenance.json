@@ -1,6 +1,6 @@
 {
   "status": "real_unsw_nb15_feasibility_not_manuscript_reproduction",
-  "source": "UNSW-NB15 official designated training/testing CSV release",
+  "source": "User-supplied archive consistent with designated UNSW-NB15 training/testing CSV layout; external authoritative checksum verification pending",
   "train_csv": "data/raw/unsw_nb15/UNSW_NB15_training-set.csv",
   "test_csv": "data/raw/unsw_nb15/UNSW_NB15_testing-set.csv",
   "sha256_train": "bec7dd5ec88dc2a0ccc7a07879d338395ed7421750f675fd0339e07dfe0648fa",
