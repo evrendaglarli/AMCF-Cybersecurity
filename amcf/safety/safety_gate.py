@@ -61,8 +61,21 @@ class SafetyGate:
             True if automation is authorized, False otherwise
         """
         # Fail closed on malformed evidence; only a detector->probability map is valid.
-        if not isinstance(calibrated_probs, dict):
+        if not isinstance(calibrated_probs, dict) or not calibrated_probs:
             return False
+        # Reject NaN, infinities, strings, and out-of-range scores before the
+        # comparator; invalid evidence must never crash the safety decision.
+        if not isinstance(posterior, (int, float, np.floating)):
+            return False
+        if not np.isfinite(posterior) or not 0.0 <= posterior <= 1.0:
+            return False
+        for detector_id, probability in calibrated_probs.items():
+            if not isinstance(detector_id, str) or not detector_id:
+                return False
+            if not isinstance(probability, (int, float, np.floating)):
+                return False
+            if not np.isfinite(probability) or not 0.0 <= probability <= 1.0:
+                return False
 
         # Clause 1: Risk reduction threshold
         # Require high posterior confidence for automation
