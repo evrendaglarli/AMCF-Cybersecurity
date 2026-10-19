@@ -1,0 +1,36 @@
+name: Reproducibility guard checks
+
+on:
+  push:
+    branches: [fix/reproducibility-docs-20261019]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  basic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile revised experiment runner
+        run: python -m py_compile experiments/run_experiments.py
+      - name: Validate requirements and explicit synthetic guard
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          req = Path('requirements.txt').read_text()
+          assert all(not line.lstrip().startswith(('#', '```', '###')) for line in req.splitlines() if line.strip())
+          s = Path('experiments/run_experiments.py').read_text()
+          t = ast.parse(s)
+          assert '--synthetic-demo' in s
+          assert 'FileNotFoundError' in s
+          assert 'results/demo/tables' in s
+          assert 'Full Paper Reproduction' not in s
+          PY
