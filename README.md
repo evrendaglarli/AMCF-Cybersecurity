@@ -4,6 +4,10 @@ Reference code for the research manuscript **"Adaptive Metacognitive Framework f
 
 AMCF uses a Sense–Reason–Act control loop combining detector calibration and fusion, working/episodic/procedural memory, risk-aware decisions, evidence enrichment, and safety-gated escalation/response.
 
+## R20 method/code consistency
+
+See [R20 implementation alignment and evidence limits](reports/R20_IMPLEMENTATION_ALIGNMENT.md) for a component-by-component mapping of paper equations and current code. This repository remains a **partial reference implementation**: matching methods does not establish reproduction of any original paper numerical findings.
+
 ## Important: scope and reproducibility
 
 **This public repository is a reference-code and demonstration package. It is not currently a verified end-to-end reproduction of the results reported in manuscript v17 R20.**
