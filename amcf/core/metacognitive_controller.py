@@ -227,14 +227,17 @@ class MetacognitiveController:
             )
             
             if gate_passed:
-                # Select and execute playbook
+                # Select a candidate for analyst review ONLY. This research
+                # prototype has no governed SOAR connector, so it cannot
+                # perform the actual automation or claim containment.
                 playbook = self.procedural_memory.select_playbook(
                     event, posterior, self.hypothesis_beliefs
                 )
-                # No SOAR/actuator connector exists in this reference branch.
-                # Selecting a playbook does NOT mean that it was executed.
                 outcome['playbook_selected'] = playbook
-                outcome['status'] = 'approval_only_no_actuation'
+                outcome['effective_action'] = 'escalate'
+                outcome['action'] = 'escalate'
+                outcome['case_package'] = self._build_case_package(event, posterior, risks)
+                outcome['status'] = 'escalated_no_actuation_connector'
             else:
                 # Downgrade to escalate
                 outcome['effective_action'] = 'escalate'
