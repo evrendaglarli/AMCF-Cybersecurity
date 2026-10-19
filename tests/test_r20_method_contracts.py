@@ -100,8 +100,8 @@ class TestR20MethodContracts(unittest.TestCase):
         self.assertLessEqual(lo, .75)
         self.assertGreaterEqual(hi, .75)
         q, rejected = holm_bonferroni_correction(np.array([.03, .01, .02]))
-        self.assertTrue(np.allclose(q, [.06, .03, .06]))
-        self.assertEqual(list(rejected), [False, True, False])
+        self.assertTrue(np.allclose(q, [.04, .03, .04]))
+        self.assertEqual(list(rejected), [True, True, True])
         self.assertAlmostEqual(newey_west_se(np.ones(100)), 0.)
 
     def test_incident_outcomes_do_not_equal_predictions(self):
