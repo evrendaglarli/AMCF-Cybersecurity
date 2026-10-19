@@ -232,9 +232,9 @@ class ExperimentRunner:
             print("  Computing metrics...")
             
             # Long-dwell recall
-            siem_dwell = compute_long_dwell_recall(y_test, siem_preds)
-            ml_dwell = compute_long_dwell_recall(y_test, ml_preds)
-            amcf_dwell = compute_long_dwell_recall(y_test, amcf_preds)
+            siem_dwell = compute_long_dwell_recall(y_test, siem_preds, events=events_test)
+            ml_dwell = compute_long_dwell_recall(y_test, ml_preds, events=events_test)
+            amcf_dwell = compute_long_dwell_recall(y_test, amcf_preds, events=events_test)
             
             # Alerts per hour
             siem_alerts = compute_alerts_per_hour(events_test, siem_preds)
