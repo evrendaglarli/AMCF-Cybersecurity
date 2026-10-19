@@ -7,10 +7,12 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import time
+from collections import deque
 
 from .calibration import TemperatureScaler, CompetenceWeightManager
 from .fusion import LogitWeightedFusion
 from .hypotheses import HypothesisTracker
+from .drift import DriftMonitor
 from .bayes_risk import BayesRiskCalculator, ValueOfInformationEstimator, CostModel
 from ..memory import WorkingMemory, EpisodicMemory, ProceduralMemory
 from ..safety import SafetyGate, EnrichmentScheduler
@@ -71,6 +73,17 @@ class MetacognitiveController:
         self.current_hypotheses = []
         self.hypothesis_beliefs = {}
         self.hypothesis_coherence = {}
+        self.drift_window = int(config.get("drift_window", 200))
+        self.drift_monitor = DriftMonitor(
+            min_window=self.drift_window,
+            psi_threshold=config.get("psi_threshold", 0.25),
+            ks_threshold=config.get("ks_threshold", 0.12),
+            ece_threshold=config.get("ece_threshold", 0.03)
+        )
+        if config.get("validation_reference_posteriors") is not None:
+            self.drift_monitor.fit_reference(config["validation_reference_posteriors"])
+        self.drift_observations = deque(maxlen=self.drift_window)
+        self.drift_status = {"status": "insufficient_evidence", "drift": None}
         self.hypothesis_tracker = HypothesisTracker(
             max_hypotheses=config.get("max_hypotheses", 10),
             kappa=config.get("coherence_kappa", 0.5)
@@ -108,6 +121,9 @@ class MetacognitiveController:
             'calibrated_probs': calibrated_probs,
             'risks': risks,
             'voi_results': voi_results,
+            'hypothesis_beliefs': self.hypothesis_beliefs.copy(),
+            'hypothesis_coherence': self.hypothesis_coherence.copy(),
+            'drift': self.drift_status.copy(),
             'outcome': outcome
         }
         
@@ -143,6 +159,12 @@ class MetacognitiveController:
             bias
         )[0]
         
+        # Validation-frozen reference and current fused posteriors.
+        # Without reference evidence, drift remains unknown.
+        self.drift_observations.append(float(posterior))
+        self.drift_status = self.drift_monitor.assess(
+            list(self.drift_observations)
+        )
         # Step 3: Append to working memory
         self.working_memory.append(event, posterior)
         
@@ -201,7 +223,9 @@ class MetacognitiveController:
         high_uncertainty = self._is_high_uncertainty(posterior)
         
         action = self.risk_calc.select_action(risks, voi_positive, high_uncertainty)
-        
+        if self.drift_status.get("drift") is True and action == "automate":
+            action = "escalate"  # No unsafe automated control under measured shift.
+
         return action, risks, voi_results
     
     def _act(self, event: Event, action: str, posterior: float,
