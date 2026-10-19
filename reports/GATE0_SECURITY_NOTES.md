@@ -5,3 +5,7 @@ This draft replaces the prior *zero failure implies safe* assumption with a one-
 The module also rejects malformed detector input and denies action when no empirically measured advisor-correlation estimate is available. These narrow changes **do not** certify an automated-response system, authenticate ground truth, or establish the independence assumption of the binomial model. No physical actuation or SOAR connector is enabled by this PR.
 
 All downstream controller integration and test-suite compatibility need independent review before merging this draft.
+
+## Integration prerequisite
+
+PR #2 has now been merged into `main` (commit `6afa0c5fdebdc4f6e70e362a58a24a33a3b6b438`), resolving the repository-wide `run_experiments.py` syntax error that previously blocked Gate 0's `compileall` job. This branch still requires passing merged-base CI before acceptance; a failed/absent run must not be treated as approval.
