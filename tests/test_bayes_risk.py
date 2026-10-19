@@ -90,5 +90,5 @@ class TestValueOfInformationEstimator:
         
         assert isinstance(voi, float)
         assert isinstance(n_samples, int)
-        assert n_samples >= estimator.N_min
-        assert n_samples <= estimator.N_max
+        assert n_samples == 0  # No fitted conditional outcomes, no synthetic VoI
+        assert voi == 0.0
