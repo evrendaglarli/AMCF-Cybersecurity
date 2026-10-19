@@ -39,6 +39,10 @@ class MetacognitiveController:
         self.num_detectors = num_detectors
         self.detector_ids = detector_ids
         self.config = config
+        self.detector_score_spaces = dict(config.get("detector_score_spaces", {}))
+        if any(mode not in ("logit", "probability")
+               for mode in self.detector_score_spaces.values()):
+            raise ValueError("detector_score_spaces must use logit or probability")
         
         # Calibration components
         self.temp_scalers = {
@@ -140,7 +144,9 @@ class MetacognitiveController:
         calibrated_probs = {}
         for det_id in self.detector_ids:
             if det_id in event.detector_scores:
-                raw_score = event.detector_scores[det_id]
+                raw_score = self._calibration_logit(
+                    det_id, event.detector_scores[det_id]
+                )
                 calibrated_prob = self.temp_scalers[det_id].calibrate(np.array([raw_score]))[0]
                 calibrated_probs[det_id] = calibrated_prob
             else:
@@ -299,7 +305,8 @@ class MetacognitiveController:
         for det_id in self.detector_ids:
             if det_id in event.detector_scores:
                 self.temp_scalers[det_id].update(
-                    np.array([event.detector_scores[det_id]]),
+                    np.array([self._calibration_logit(
+                        det_id, event.detector_scores[det_id])]),
                     np.array([label])
                 )
         
@@ -313,6 +320,22 @@ class MetacognitiveController:
         # Store in episodic memory
         self.episodic_memory.append_outcome(event, action, outcome, label)
     
+    def _calibration_logit(self, detector_id: str, score: float) -> float:
+        """Explicit score-space contract for Eq. (1): sigmoid(logit/T).
+
+        Probability-producing detectors must be declared in config instead of
+        silently feeding their [0,1] outputs to a raw-logit temperature scale.
+        """
+        value = float(score)
+        if not np.isfinite(value):
+            raise ValueError("Detector score must be finite")
+        if self.detector_score_spaces.get(detector_id, "logit") == "probability":
+            if not 0 <= value <= 1:
+                raise ValueError("Probability score out of range")
+            value = float(np.clip(value, 1e-7, 1 - 1e-7))
+            return float(np.log(value / (1-value)))
+        return value
+
     # ===== Helper methods =====
     
     def _update_hypotheses(self, event: Event, posterior: float, similar_cases: List):
