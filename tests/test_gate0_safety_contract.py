@@ -24,6 +24,20 @@ class TestSafetyGateFailClosed(unittest.TestCase):
         self.assertFalse(gate.check(.99, ['lightgbm', 'tcn']))
         self.assertFalse(gate.check(.99, None))
 
+    def test_nonfinite_or_invalid_evidence_is_denied(self):
+        gate = SafetyGate()
+        for evidence in [
+            {'lightgbm': float('nan'), 'tcn': .99},
+            {'lightgbm': float('inf'), 'tcn': .99},
+            {'lightgbm': '0.99', 'tcn': .99},
+            {'lightgbm': -0.1, 'tcn': .99},
+            {'lightgbm': 1.1, 'tcn': .99},
+            {None: .99, 'tcn': .99},
+        ]:
+            self.assertFalse(gate.check(.99, evidence))
+        for p in [float('nan'), float('inf'), -0.1, 1.1, '0.99']:
+            self.assertFalse(gate.check(p, {'lightgbm': .99, 'tcn': .99}))
+
     def test_200_zero_false_isolations_not_enough(self):
         gate = SafetyGate()
         for _ in range(200):
