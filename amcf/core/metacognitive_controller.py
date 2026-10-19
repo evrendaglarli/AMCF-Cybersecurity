@@ -10,6 +10,7 @@ import time
 
 from .calibration import TemperatureScaler, CompetenceWeightManager
 from .fusion import LogitWeightedFusion
+from .hypotheses import HypothesisTracker
 from .bayes_risk import BayesRiskCalculator, ValueOfInformationEstimator, CostModel
 from ..memory import WorkingMemory, EpisodicMemory, ProceduralMemory
 from ..safety import SafetyGate, EnrichmentScheduler
@@ -69,6 +70,11 @@ class MetacognitiveController:
         # State
         self.current_hypotheses = []
         self.hypothesis_beliefs = {}
+        self.hypothesis_coherence = {}
+        self.hypothesis_tracker = HypothesisTracker(
+            max_hypotheses=config.get("max_hypotheses", 10),
+            kappa=config.get("coherence_kappa", 0.5)
+        )
         
     def process_event(self, event: Event) -> Tuple[str, Dict]:
         """
@@ -87,14 +93,14 @@ class MetacognitiveController:
         action, risks, voi_results = self._reason(event, posterior, calibrated_probs)
         
         # ========== ACT (Algorithm 3) ==========
-        outcome = self._act(event, action, posterior, risks, calibrated_probs)
+        outcome = self._act(event, action, posterior, risks, calibrated_probs, voi_results)
         # The safety gate may downgrade a planned automation. Expose the
         # effective decision, not an action which was never authorized.
         effective_action = outcome.get('effective_action', action)
 
         # Warning: instant ground-truth feedback is a research-prototype shortcut;
         # causal/label-delayed evaluation requires an explicit feedback clock.
-        if event.label is not None:
+        if event.label is not None and self.config.get("allow_inline_confirmed_feedback", False):
             self._update_from_feedback(event, calibrated_probs, effective_action, outcome)
         
         metadata = {
@@ -128,7 +134,7 @@ class MetacognitiveController:
         probs_array = np.array([calibrated_probs[det_id] for det_id in self.detector_ids])
         weights = self.weight_manager.get_weights()
         
-        # Contextual bias (placeholder: could use asset criticality)
+        # Without an independently fitted context-prior model use neutral bias.
         bias = 0.0
         
         posterior = self.fusion.fuse(
@@ -158,8 +164,8 @@ class MetacognitiveController:
         Returns:
             (selected_action, risks_dict, voi_results)
         """
-        # Step 1: Update hypothesis coherence and beliefs
-        self._update_hypothesis_beliefs(event, posterior, calibrated_probs)
+        # Step 1: Hypotheses updated once in SENSE using deduplicated
+        # stage evidence. Unknown stage tags cannot create hypotheses.
         
         # Step 2: Compute Bayes risks
         severity = self._infer_severity(event)
@@ -183,10 +189,12 @@ class MetacognitiveController:
                 enrichment_type=enrich_type,
                 severity=severity
             )
-            voi_results[enrich_type] = {'voi': voi, 'n_samples': n_samples}
+            voi_results[enrich_type] = {
+                'voi': voi, 'n_samples': n_samples, 'cost': enrich_cost
+            }
         
-        # Step 4: Monitor calibration drift (placeholder)
-        # In full implementation, track ECE/PSI/KS and trigger recalibration
+        # Drift requires a validated reference stream and delayed labels.
+        # No drift signal is fabricated when such evidence is unavailable.
         
         # Step 5-6: Decision policy
         voi_positive = any(v['voi'] > 0 for v in voi_results.values())
@@ -197,7 +205,8 @@ class MetacognitiveController:
         return action, risks, voi_results
     
     def _act(self, event: Event, action: str, posterior: float,
-             risks: Dict, calibrated_probs: Dict[str, float]) -> Dict:
+             risks: Dict, calibrated_probs: Dict[str, float],
+             voi_results: Optional[Dict] = None) -> Dict:
         """
         Algorithm 3: Action Execution and Learning
         
@@ -212,11 +221,13 @@ class MetacognitiveController:
             
         elif action == 'gather':
             # Select enrichments under budget (Algorithm 5)
-            enrichments = self.enrichment_scheduler.select_enrichments(
-                voi_results={}  # Simplified
-            )
-            outcome['enrichments_requested'] = enrichments
-            outcome['status'] = 'gathering'
+            enrichments = self.enrichment_scheduler.select_enrichments(voi_results or {})
+            # No installed connector: choosing an enrichment is not executing it.
+            outcome['enrichments_proposed'] = enrichments
+            outcome['effective_action'] = 'escalate'
+            outcome['action'] = 'escalate'
+            outcome['status'] = 'escalated_no_enrichment_connector'
+            outcome['case_package'] = self._build_case_package(event, posterior, risks)
             
         elif action == 'automate':
             # Safety gate check (Algorithm 4)
@@ -281,22 +292,21 @@ class MetacognitiveController:
     # ===== Helper methods =====
     
     def _update_hypotheses(self, event: Event, posterior: float, similar_cases: List):
-        """Update attack-chain hypotheses from memory"""
-        # Simplified: maintain up to 10 hypotheses
-        # Full implementation would use attack graphs, TTP mappings, etc.
-        self.current_hypotheses = []  # Placeholder
-    
+        """R20 Eq. 4–5: bounded, once-only ATT&CK-stage hypotheses.
+
+        Requires externally tagged evidence; no tactic labels are inferred
+        from raw UNSW tabular records.
+        """
+        beliefs, coherence = self.hypothesis_tracker.update(event, posterior)
+        self.hypothesis_beliefs = beliefs
+        self.hypothesis_coherence = coherence
+        self.current_hypotheses = list(self.hypothesis_tracker.active.values())
+
     def _update_hypothesis_beliefs(self, event: Event, posterior: float,
                                     calibrated_probs: Dict):
-        """
-        Equation (5): Update beliefs with coherence
-        q_{t+1}^j ∝ σ(logit(q_t^j) + Σ w_k*logit(p_k) + κ*Γ_t^j)
-        """
-        # Placeholder: In full implementation,
-	# Placeholder: In full implementation, compute coherence scores
-        # and update beliefs for each hypothesis
-        self.hypothesis_beliefs = {}  # Simplified
-    
+        """Compatibility no-op: evidence is processed only once in SENSE."""
+        return None
+
     def _infer_severity(self, event: Event) -> str:
         """Infer incident severity from event attributes"""
         # Simplified heuristic
