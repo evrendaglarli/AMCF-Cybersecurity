@@ -21,6 +21,7 @@ for name, relative in [
 from amcf.core.hypotheses import HypothesisTracker
 from amcf.core.bayes_risk import CostModel, BayesRiskCalculator, ValueOfInformationEstimator
 from amcf.core.drift import DriftMonitor
+from amcf.core.calibration import CompetenceWeightManager
 from amcf.safety.enrichment_scheduler import EnrichmentScheduler
 from amcf.utils.statistics import (bootstrap_ci, delong_test, holm_bonferroni_correction,
                                    newey_west_se)
@@ -116,6 +117,16 @@ class TestR20MethodContracts(unittest.TestCase):
         ]
         self.assertEqual(compute_long_dwell_recall(y, predictions, items, min_dwell_ms=3600_000), 1.)
         self.assertEqual(compute_ttc(items, y, predictions), 60.)
+
+    def test_brier_updates_fused_advisor_competence(self):
+        mgr = CompetenceWeightManager(num_detectors=2)
+        p = np.array([[.9, .1], [.1, .9]])
+        truth = np.array([1, 0])
+        mgr.update(p, truth)
+        weights = mgr.get_weights()
+        self.assertAlmostEqual(weights.sum(), 1.0)
+        self.assertGreater(weights[0], weights[1])
+        self.assertTrue(np.all(weights >= 0))
 
     def test_drift_does_not_claim_without_reference(self):
         obj = DriftMonitor(min_window=10)
