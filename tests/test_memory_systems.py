@@ -79,8 +79,8 @@ class TestEpisodicMemory:
     
     def test_initialization(self):
         """Test episodic memory initialization"""
-        em = EpisodicMemory(embedding_dim=768)
-        assert em.embedding_dim == 768
+        em = EpisodicMemory(embedding_dim=384)
+        assert em.embedding_dim == 384
         assert len(em.incident_store) == 0
     
     def test_append_outcome(self):
