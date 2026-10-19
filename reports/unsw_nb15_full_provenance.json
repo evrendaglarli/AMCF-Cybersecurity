@@ -1,0 +1,33 @@
+{
+  "status": "real_unsw_nb15_feasibility_not_manuscript_reproduction",
+  "source": "User-supplied archive consistent with designated UNSW-NB15 training/testing CSV layout; external authoritative checksum verification pending",
+  "train_csv": "data/raw/unsw_nb15/UNSW_NB15_training-set.csv",
+  "test_csv": "data/raw/unsw_nb15/UNSW_NB15_testing-set.csv",
+  "sha256_train": "bec7dd5ec88dc2a0ccc7a07879d338395ed7421750f675fd0339e07dfe0648fa",
+  "sha256_test": "734fe6642edf758f7c94d7d9149426b49d202fe8e7bf0bef47392489c3c0a559",
+  "release_train_rows": 175341,
+  "release_test_rows": 82332,
+  "sampled_train_rows": 175341,
+  "sampled_test_rows": 82332,
+  "fit_rows": 122738,
+  "calibration_rows": 26301,
+  "threshold_tuning_rows": 26302,
+  "feature_count_after_encoding": 191,
+  "seed": 42,
+  "target_fpr": 0.05,
+  "labels_test_positive": 45332,
+  "labels_test_negative": 37000,
+  "python": "3.13.5",
+  "scikit_learn": "1.8.0",
+  "pandas": "2.2.3",
+  "numpy": "2.3.5",
+  "limitations": [
+    "No verified event timestamps or incident identifiers in designated training/testing release.",
+    "FPR (not FP/hour) and flow-level recall (not long-dwell recall) are reported.",
+    "AMCF-lite is a decision-only two-model proxy, NOT the full AMCF architecture.",
+    "Release-defined train/test separation, not verified chronological splits.",
+    "No containment, safety risk, operator study, ablation, or original R20 metrics reproduced.",
+    "A partial/subsampled pilot is not a full-scale benchmark assessment."
+  ],
+  "dataset_provenance_note": "User-supplied archive; expected column schema/record counts validated, but independently published official checksums not verified."
+}

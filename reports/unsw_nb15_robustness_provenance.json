@@ -1,0 +1,66 @@
+{
+  "scope": "AMCF-lite real UNSW-NB15 technical robustness; NOT original R20 experiments",
+  "train_sha256": "bec7dd5ec88dc2a0ccc7a07879d338395ed7421750f675fd0339e07dfe0648fa",
+  "test_sha256": "734fe6642edf758f7c94d7d9149426b49d202fe8e7bf0bef47392489c3c0a559",
+  "input_train_rows": 175341,
+  "input_test_rows": 82332,
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "max_train": 20000,
+  "budgets": [
+    0.01,
+    0.05,
+    0.1
+  ],
+  "bootstrap_resamples": 2000,
+  "cost_ratio": 0.2,
+  "splits": [
+    {
+      "seed": 42,
+      "fit": 14000,
+      "cal": 3000,
+      "tune": 3000,
+      "encoded_feature_count": 186
+    },
+    {
+      "seed": 43,
+      "fit": 14000,
+      "cal": 3000,
+      "tune": 3000,
+      "encoded_feature_count": 187
+    },
+    {
+      "seed": 44,
+      "fit": 14000,
+      "cal": 3000,
+      "tune": 3000,
+      "encoded_feature_count": 188
+    },
+    {
+      "seed": 45,
+      "fit": 14000,
+      "cal": 3000,
+      "tune": 3000,
+      "encoded_feature_count": 190
+    },
+    {
+      "seed": 46,
+      "fit": 14000,
+      "cal": 3000,
+      "tune": 3000,
+      "encoded_feature_count": 190
+    }
+  ],
+  "python": "3.13.5",
+  "numpy": "2.3.5",
+  "pandas": "2.2.3",
+  "scikit_learn": "1.8.0",
+  "scipy": "1.17.0",
+  "statistical_method": "Wilson 95% CI for held-out test flow recall/FPR; paired class-stratified multinomial nonparametric bootstrap for AMCF-lite minus baseline differences. All seeds reuse the same fixed public test partition; seed repetitions are not independent new holdout datasets.",
+  "caveat": "Validation FPR targets do not imply held-out test FPR control; never choose a threshold using the test labels. No temporal/incident, drift, safety, human-factors, or full AMCF evaluation."
+}
