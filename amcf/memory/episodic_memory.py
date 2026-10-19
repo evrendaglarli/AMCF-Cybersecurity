@@ -6,7 +6,6 @@ Section 3.1 and Algorithm 1
 import numpy as np
 import hnswlib
 from typing import List, Dict, Any
-from sentence_transformers import SentenceTransformer
 
 class EpisodicMemory:
     """
@@ -14,6 +13,8 @@ class EpisodicMemory:
     """
     
     def __init__(self, embedding_dim: int = 384, max_elements: int = 10_000_000):
+        if embedding_dim != 384:
+            raise ValueError("all-MiniLM-L6-v2 emits 384 dimensions; requested index mismatches")
         self.embedding_dim = embedding_dim
         
         # HNSW index for fast retrieval
@@ -29,7 +30,7 @@ class EpisodicMemory:
         self.next_id = 0
         
         # Embedding model (Sentence-BERT)
-        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.embedding_model = None  # Lazy: no network/model load at controller startup
         
     def retrieve_similar(self, recent_events: List, top_k: int = 5) -> List[Dict]:
         """
@@ -112,11 +113,12 @@ class EpisodicMemory:
             weights.append(posterior * recency)
         
         # Embed texts
-        embeddings = self.embedding_model.encode(event_texts)
+        embeddings = self._encode(event_texts)
         
         # Weighted average
         weights = np.array(weights)
-        weights = weights / weights.sum()
+        total = weights.sum()
+        weights = weights / total if total > 1e-12 else np.full(len(weights), 1/len(weights))
         
         aggregated = np.average(embeddings, axis=0, weights=weights)
         return aggregated.reshape(1, -1)
@@ -124,9 +126,15 @@ class EpisodicMemory:
     def _embed_incident(self, incident: Dict) -> np.ndarray:
         """Embed a single incident"""
         text = self._event_to_text(incident['event'])
-        embedding = self.embedding_model.encode([text])
+        embedding = self._encode([text])
         return embedding
     
+    def _encode(self, texts):
+        if self.embedding_model is None:
+            from sentence_transformers import SentenceTransformer
+            self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        return self.embedding_model.encode(texts)
+
     def _event_to_text(self, event: Any) -> str:
         """Convert event to natural language description"""
         parts = [
