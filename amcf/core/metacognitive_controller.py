@@ -53,7 +53,7 @@ class MetacognitiveController:
         # Memory systems
         self.working_memory = WorkingMemory(max_size=config.get('working_memory_size', 500))
         self.episodic_memory = EpisodicMemory(
-            embedding_dim=config.get('embedding_dim', 768)
+            embedding_dim=config.get('embedding_dim', 384)
         )
         self.procedural_memory = ProceduralMemory()
         
@@ -87,11 +87,15 @@ class MetacognitiveController:
         action, risks, voi_results = self._reason(event, posterior, calibrated_probs)
         
         # ========== ACT (Algorithm 3) ==========
-        outcome = self._act(event, action, posterior, risks)
-        
-        # Update memories and weights if ground truth available
+        outcome = self._act(event, action, posterior, risks, calibrated_probs)
+        # The safety gate may downgrade a planned automation. Expose the
+        # effective decision, not an action which was never authorized.
+        effective_action = outcome.get('effective_action', action)
+
+        # Warning: instant ground-truth feedback is a research-prototype shortcut;
+        # causal/label-delayed evaluation requires an explicit feedback clock.
         if event.label is not None:
-            self._update_from_feedback(event, calibrated_probs, action, outcome)
+            self._update_from_feedback(event, calibrated_probs, effective_action, outcome)
         
         metadata = {
             'posterior': posterior,
@@ -101,7 +105,7 @@ class MetacognitiveController:
             'outcome': outcome
         }
         
-        return action, metadata
+        return effective_action, metadata
     
     def _sense(self, event: Event) -> Tuple[float, Dict[str, float]]:
         """
@@ -192,8 +196,8 @@ class MetacognitiveController:
         
         return action, risks, voi_results
     
-    def _act(self, event: Event, action: str, posterior: float, 
-             risks: Dict) -> Dict:
+    def _act(self, event: Event, action: str, posterior: float,
+             risks: Dict, calibrated_probs: Dict[str, float]) -> Dict:
         """
         Algorithm 3: Action Execution and Learning
         
@@ -218,7 +222,7 @@ class MetacognitiveController:
             # Safety gate check (Algorithm 4)
             gate_passed = self.safety_gate.check(
                 posterior=posterior,
-                calibrated_probs=list(self.temp_scalers.keys()),  # Simplified
+                calibrated_probs=calibrated_probs,
                 asset_risk=1.0
             )
             
@@ -227,11 +231,15 @@ class MetacognitiveController:
                 playbook = self.procedural_memory.select_playbook(
                     event, posterior, self.hypothesis_beliefs
                 )
-                outcome['playbook_executed'] = playbook
-                outcome['status'] = 'automated'
+                # No SOAR/actuator connector exists in this reference branch.
+                # Selecting a playbook does NOT mean that it was executed.
+                outcome['playbook_selected'] = playbook
+                outcome['status'] = 'approval_only_no_actuation'
             else:
                 # Downgrade to escalate
-                action = 'escalate'
+                outcome['effective_action'] = 'escalate'
+                outcome['action'] = 'escalate'
+                outcome['case_package'] = self._build_case_package(event, posterior, risks)
                 outcome['status'] = 'escalated_from_failed_gate'
                 
         elif action == 'escalate':
