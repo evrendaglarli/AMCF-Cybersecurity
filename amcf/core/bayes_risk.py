@@ -78,8 +78,9 @@ class BayesRiskCalculator:
         )
         R_escalate = C_escalate
         
-        # GATHER risk (placeholder, will be computed via VoI)
-        R_gather = 0.0
+        # GATHER has no standalone action loss before an enrichment model
+        # is supplied; it must not be selected by a spurious zero cost.
+        R_gather = float("inf")
         
         return {
             'ignore': R_ignore,
@@ -102,103 +103,55 @@ class BayesRiskCalculator:
 
 
 class ValueOfInformationEstimator:
+    """Conditional expected value of information, R20 Eq. (10).
+
+    In the absence of validated conditional enrichment outcomes the safe
+    response is no information-gathering recommendation (VoI=0, samples=0).
+    Synthetic posterior movement is never substituted for real evidence.
     """
-    Estimate VoI for enrichment queries using Monte Carlo sampling
-    Equation (10): VoI(e) = min_a R(a) - E[min_a R^(e)(a)] - C_gather(e)
-    """
-    
+
     def __init__(self, risk_calculator: BayesRiskCalculator,
                  N_min: int = 64, N_max: int = 4096,
-                 tolerance: float = 0.02, wall_clock_budget_ms: float = 150):
+                 tolerance: float = 0.02, wall_clock_budget_ms: float = 150,
+                 outcome_models=None):
         self.risk_calc = risk_calculator
-        self.N_min = N_min
-        self.N_max = N_max
-        self.tolerance = tolerance
-        self.budget_ms = wall_clock_budget_ms
-        
+        self.N_min, self.N_max = N_min, N_max
+        self.tolerance, self.budget_ms = tolerance, wall_clock_budget_ms
+        # Mapping from enrichment name to validated callable(context)->
+        # iterable of (P(outcome|context), posterior_given_outcome).
+        self.outcome_models = dict(outcome_models or {})
+
+    def register_outcome_model(self, enrichment_type: str, model):
+        if not callable(model):
+            raise TypeError("An enrichment outcome model must be callable")
+        self.outcome_models[enrichment_type] = model
+
     def estimate_voi(self, posterior_before: float, enrichment_cost: float,
-                     enrichment_type: str, severity: str = 'medium',
+                     enrichment_type: str, severity: str = "medium",
                      **risk_kwargs) -> Tuple[float, int]:
-        """
-        Monte Carlo VoI estimation with adaptive early termination
-        
-        Args:
-            posterior_before: Current π_t before enrichment
-            enrichment_cost: C_gather(e)
-            enrichment_type: 'edr_deep', 'sandbox', 'pcap', etc.
-            severity: Incident severity
-            **risk_kwargs: Additional args for risk computation
-            
-        Returns:
-            (VoI, num_samples_used)
-        """
-        # Baseline risk
-        risks_base = self.risk_calc.compute_risks(posterior_before, severity, **risk_kwargs)
-        R_base = min(risks_base['ignore'], risks_base['automate'], risks_base['escalate'])
-        
-        # Monte Carlo sampling
-        samples = []
-        n = 0
-        
-        while n < self.N_max:
-            # Sample enrichment outcome (simplified: assume posterior shifts)
-            posterior_after = self._sample_posterior_after_enrichment(
-                posterior_before, enrichment_type
-            )
-            
-            # Compute risk after enrichment
-            risks_after = self.risk_calc.compute_risks(posterior_after, severity, **risk_kwargs)
-            R_after = min(risks_after['ignore'], risks_after['automate'], risks_after['escalate'])
-            
-            samples.append(R_after)
-            n += 1
-            
-            # Early termination check (BCa CI half-width < tolerance)
-            if n >= self.N_min and n % 32 == 0:
-                ci_half_width = self._bootstrap_ci_half_width(samples)
-                if ci_half_width < self.tolerance:
-                    break
-        
-        # Expected risk after enrichment
-        E_R_after = np.mean(samples)
-        
-        # VoI = risk reduction - enrichment cost
-        voi = R_base - E_R_after - enrichment_cost
-        
-        return voi, n
-    
-    def _sample_posterior_after_enrichment(self, posterior: float, 
-                                            enrichment_type: str) -> float:
-        """
-        Simulate posterior update after enrichment
-        Simplified model: add Gaussian noise with enrichment-specific variance
-        """
-        # Enrichment informativeness (higher = more informative)
-        info_gain = {
-            'edr_deep': 0.15,
-            'sandbox': 0.20,
-            'pcap': 0.10,
-            'memory_dump': 0.25
-        }.get(enrichment_type, 0.10)
-        
-        # Posterior shifts toward 0 or 1 based on ground truth (unknown in practice)
-        # Here we simulate: if posterior > 0.5, shift up; else shift down
-        direction = 1 if posterior > 0.5 else -1
-        shift = direction * np.random.beta(2, 5) * info_gain
-        
-        posterior_after = np.clip(posterior + shift, 0.01, 0.99)
-        return posterior_after
-    
-    def _bootstrap_ci_half_width(self, samples: list, n_bootstrap: int = 1000) -> float:
-        """Compute BCa 95% CI half-width for early stopping"""
-        samples = np.array(samples)
-        bootstrap_means = []
-        
-        for _ in range(n_bootstrap):
-            resample = np.random.choice(samples, size=len(samples), replace=True)
-            bootstrap_means.append(np.mean(resample))
-        
-        ci_lower = np.percentile(bootstrap_means, 2.5)
-        ci_upper = np.percentile(bootstrap_means, 97.5)
-        
-        return (ci_upper - ci_lower) / 2.0
+        if enrichment_type not in self.outcome_models:
+            return 0.0, 0
+        if not 0 <= posterior_before <= 1 or enrichment_cost < 0:
+            raise ValueError("Invalid posterior or cost")
+        options = tuple(self.outcome_models[enrichment_type](
+            posterior_before=posterior_before, severity=severity,
+            **risk_kwargs
+        ))
+        if not options:
+            raise ValueError("Empty predictive outcome distribution")
+        total = 0.0
+        expected_risk = 0.0
+        for probability, posterior_after in options:
+            if not (np.isfinite(probability) and np.isfinite(posterior_after)
+                    and probability >= 0 and 0 <= posterior_after <= 1):
+                raise ValueError("Invalid conditional outcome distribution")
+            total += probability
+            risks = self.risk_calc.compute_risks(posterior_after, severity, **risk_kwargs)
+            expected_risk += probability * min(risks[k] for k in
+                                                ("ignore", "automate", "escalate"))
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError("Predictive outcomes must have unit probability mass")
+        risks = self.risk_calc.compute_risks(posterior_before, severity, **risk_kwargs)
+        baseline = min(risks[k] for k in ("ignore", "automate", "escalate"))
+        # Exact summation over supplied discrete outcomes; zero Monte Carlo samples.
+        return float(baseline - expected_risk - enrichment_cost), 0
