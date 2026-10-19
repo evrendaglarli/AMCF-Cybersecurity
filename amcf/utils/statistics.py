@@ -1,170 +1,132 @@
+"""AMCF statistical routines with explicit estimands and resampling limits.
+
+BCa confidence limits require i.i.d. observational units. Incident/temporal
+claims must instead supply appropriate independent blocks, not flat events.
 """
-Statistical procedures: Bootstrap CI, DeLong test, Holm-Bonferroni
-Section 5.4
-"""
+from __future__ import annotations
 
 import numpy as np
 from scipy import stats
-from typing import Tuple, List
-from sklearn.metrics import roc_auc_score
+from typing import Tuple
+
+
+def _bca_mean(sample, n_bootstrap, ci, seed=42):
+    data = np.asarray(sample, dtype=float)
+    if data.size < 2:
+        raise ValueError("At least two observations are required")
+    if np.all(data == data[0]):
+        return float(data[0]), float(data[0])
+    bounds = stats.bootstrap(
+        (data,), np.mean, n_resamples=n_bootstrap, confidence_level=ci,
+        method="BCa", random_state=np.random.default_rng(seed)
+    ).confidence_interval
+    return float(bounds.low), float(bounds.high)
 
 
 def bootstrap_ci(y_true: np.ndarray, y_pred: np.ndarray,
                  n_bootstrap: int = 10000, ci: float = 0.95) -> Tuple[float, float]:
-    """
-    Compute BCa (Bias-Corrected and Accelerated) bootstrap 95% CI for recall
-    Equation: CI^95 for Recall@B
-    """
-    recalls = []
-    
-    for _ in range(n_bootstrap):
-        # Resample with replacement (stratified by class if possible)
-        indices = np.random.choice(len(y_true), size=len(y_true), replace=True)
-        y_true_boot = y_true[indices]
-        y_pred_boot = y_pred[indices]
-        
-        # Compute recall
-        tp = ((y_pred_boot == 1) & (y_true_boot == 1)).sum()
-        fn = ((y_pred_boot == 0) & (y_true_boot == 1)).sum()
-        
-        if (tp + fn) > 0:
-            recall = tp / (tp + fn)
-            recalls.append(recall)
-    
-    recalls = np.array(recalls)
-    
-    # Percentile CI
-    alpha = (1 - ci) / 2
-    lower = np.percentile(recalls, alpha * 100)
-    upper = np.percentile(recalls, (1 - alpha) * 100)
-    
-    return (lower, upper)
+    """95% BCa CI for *flow-level* recall, sampling labelled positives."""
+    y, p = np.asarray(y_true), np.asarray(y_pred)
+    if y.shape != p.shape:
+        raise ValueError("Label/prediction length mismatch")
+    return _bca_mean((p[y == 1] == 1).astype(float), n_bootstrap, ci)
 
 
 def bootstrap_ci_precision(y_true: np.ndarray, y_pred: np.ndarray,
                            n_bootstrap: int = 10000) -> Tuple[float, float]:
-    """Bootstrap CI for precision/escalation precision"""
-    precisions = []
-    
-    for _ in range(n_bootstrap):
-        indices = np.random.choice(len(y_true), size=len(y_true), replace=True)
-        y_true_boot = y_true[indices]
-        y_pred_boot = y_pred[indices]
-        
-        tp = ((y_pred_boot == 1) & (y_true_boot == 1)).sum()
-        fp = ((y_pred_boot == 1) & (y_true_boot == 0)).sum()
-        
-        if (tp + fp) > 0:
-            precision = tp / (tp + fp)
-            precisions.append(precision)
-    
-    precisions = np.array(precisions)
-    lower = np.percentile(precisions, 2.5)
-    upper = np.percentile(precisions, 97.5)
-    
-    return (lower, upper)
+    """95% BCa CI for precision of predicted positive actions."""
+    y, p = np.asarray(y_true), np.asarray(y_pred)
+    if y.shape != p.shape:
+        raise ValueError("Label/prediction length mismatch")
+    return _bca_mean((y[p == 1] == 1).astype(float), n_bootstrap, 0.95)
 
 
 def bootstrap_ci_median(data: np.ndarray, n_bootstrap: int = 10000) -> Tuple[float, float]:
-    """Bootstrap CI for median (e.g., TTC)"""
-    medians = []
-    
-    for _ in range(n_bootstrap):
-        resample = np.random.choice(data, size=len(data), replace=True)
-        medians.append(np.median(resample))
-    
-    medians = np.array(medians)
-    lower = np.percentile(medians, 2.5)
-    upper = np.percentile(medians, 97.5)
-    
-    return (lower, upper)
+    """95% percentile CI for an observed median, e.g. verified incident TTC."""
+    data = np.asarray(data, dtype=float)
+    if data.size < 2 or not np.all(np.isfinite(data)):
+        raise ValueError("At least two finite observations required")
+    rng = np.random.default_rng(42)
+    estimates = np.empty(n_bootstrap)
+    for i in range(n_bootstrap):
+        estimates[i] = np.median(rng.choice(data, data.size, replace=True))
+    return tuple(map(float, np.quantile(estimates, [0.025, 0.975])))
+
+
+def _delong_influences(y, score):
+    """Exact empirical AUC placements using ranks, not pairwise dense matrices."""
+    pos = np.asarray(score, dtype=float)[y == 1]
+    neg = np.asarray(score, dtype=float)[y == 0]
+    if not len(pos) or not len(neg):
+        raise ValueError("Both classes required for DeLong")
+    sorted_neg, sorted_pos = np.sort(neg), np.sort(pos)
+    v10 = (np.searchsorted(sorted_neg, pos, "left") +
+           np.searchsorted(sorted_neg, pos, "right")) / (2 * len(neg))
+    v01 = (len(pos) - (np.searchsorted(sorted_pos, neg, "left") +
+                          np.searchsorted(sorted_pos, neg, "right")) / 2) / len(pos)
+    return float(v10.mean()), v10, v01
 
 
 def delong_test(y_true: np.ndarray, y_score1: np.ndarray,
                 y_score2: np.ndarray) -> float:
+    """Two-sided *paired DeLong* ROC-AUC comparison, including tied scores.
+
+    Requires independent observations; do not apply directly to correlated
+    telemetry events or incident-time blocks.
     """
-    DeLong test for comparing ROC-AUC of two models
-    Returns: p-value
-    """
-    if len(np.unique(y_true)) < 2:
-        return 1.0
-    
-    try:
-        auc1 = roc_auc_score(y_true, y_score1)
-        auc2 = roc_auc_score(y_true, y_score2)
-    except:
-        return 1.0
-    
-    auc_diff = auc1 - auc2
-    
-    # Permutation test
-    n_perms = 1000
-    perm_diffs = []
-    
-    for _ in range(n_perms):
-        perm_indices = np.random.permutation(len(y_true))
-        try:
-            auc1_perm = roc_auc_score(y_true[perm_indices], y_score1[perm_indices])
-            auc2_perm = roc_auc_score(y_true[perm_indices], y_score2[perm_indices])
-            perm_diffs.append(auc1_perm - auc2_perm)
-        except:
-            pass
-    
-    perm_diffs = np.array(perm_diffs)
-    p_value = (np.abs(perm_diffs) >= np.abs(auc_diff)).mean()
-    
-    return float(p_value)
+    y = np.asarray(y_true)
+    a, b = np.asarray(y_score1, float), np.asarray(y_score2, float)
+    if not (y.ndim == a.ndim == b.ndim == 1 and len(y) == len(a) == len(b)):
+        raise ValueError("Expected three equally-sized one-dimensional arrays")
+    if not (set(np.unique(y)).issubset({0, 1}) and np.all(np.isfinite(a))
+            and np.all(np.isfinite(b))):
+        raise ValueError("Binary labels and finite scores required")
+    if (y == 1).sum() < 2 or (y == 0).sum() < 2:
+        raise ValueError("At least two samples of each class required")
+    auc1, v10a, v01a = _delong_influences(y, a)
+    auc2, v10b, v01b = _delong_influences(y, b)
+    n1, n0 = int((y == 1).sum()), int((y == 0).sum())
+    cov10 = np.cov(np.stack((v10a, v10b)), ddof=1) / n1
+    cov01 = np.cov(np.stack((v01a, v01b)), ddof=1) / n0
+    total = cov10 + cov01
+    variance = float(total[0, 0] + total[1, 1] - 2 * total[0, 1])
+    difference = auc1 - auc2
+    if variance <= 1e-15:
+        return 1.0 if abs(difference) < 1e-12 else 0.0
+    return float(2 * stats.norm.sf(abs(difference) / np.sqrt(variance)))
 
 
-def holm_bonferroni_correction(p_values: np.ndarray, alpha: float = 0.05) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Holm-Bonferroni multiple comparison correction
-    Returns: (adjusted_p_values, rejected)
-    """
-    n = len(p_values)
-    sorted_indices = np.argsort(p_values)
-    sorted_p = p_values[sorted_indices]
-    
-    adjusted_p = np.zeros(n)
-    rejected = np.zeros(n, dtype=bool)
-    
-    for i, idx in enumerate(sorted_indices):
-        adjusted_p[idx] = min(1.0, sorted_p[i] * (n - i))
-        if adjusted_p[idx] <= alpha:
-            rejected[idx] = True
-    
-    # Ensure monotonicity
-    for i in range(1, n):
-        if adjusted_p[sorted_indices[i]] < adjusted_p[sorted_indices[i-1]]:
-            adjusted_p[sorted_indices[i]] = adjusted_p[sorted_indices[i-1]]
-    
-    return adjusted_p, rejected
+def holm_bonferroni_correction(p_values: np.ndarray, alpha: float = 0.05):
+    """Holm step-down multiplicity adjustment with monotone adjusted p-values."""
+    p = np.asarray(p_values, float)
+    if p.ndim != 1 or np.any(~np.isfinite(p)) or np.any((p < 0) | (p > 1)):
+        raise ValueError("p-values must be finite within [0,1]")
+    n = len(p)
+    order = np.argsort(p)
+    adjusted = np.empty(n)
+    adjusted[order] = np.minimum(
+        1.0, np.maximum.accumulate(p[order] * np.arange(n, 0, -1)))
+    return adjusted, adjusted <= alpha
 
 
 def newey_west_se(residuals: np.ndarray, lag: int = 7) -> float:
-    """
-    Newey-West standard error accounting for autocorrelation
-    For temporal data with lag structure
-    """
-    n = len(residuals)
-    
-    # Compute variance
-    var = np.var(residuals)
-    
-    # Add autocorrelation adjustment
-    for l in range(1, lag + 1):
-        if l < n:
-            cov = np.mean(residuals[:-l] * residuals[l:])
-            weight = 1 - (l / (lag + 1))
-            var += 2 * weight * cov
-    
-    return np.sqrt(var / n)
+    """HAC standard error of the *mean*, based on centred residuals."""
+    r = np.asarray(residuals, dtype=float)
+    if r.ndim != 1 or len(r) < 2 or lag < 0 or not np.all(np.isfinite(r)):
+        raise ValueError("Nonempty finite univariate residual series required")
+    x = r - r.mean()
+    n = len(x)
+    gamma0 = float(np.dot(x, x) / n)
+    estimate = gamma0
+    for k in range(1, min(lag, n - 1) + 1):
+        cov = float(np.dot(x[k:], x[:-k]) / n)
+        estimate += 2 * (1 - k / (lag + 1)) * cov
+    return float(np.sqrt(max(0.0, estimate) / n))
 
 
-def compute_confidence_interval(values: np.ndarray, ci: float = 0.95) -> Tuple[float, float]:
-    """Compute percentile-based CI for any metric"""
-    alpha = (1 - ci) / 2
-    lower = np.percentile(values, alpha * 100)
-    upper = np.percentile(values, (1 - alpha) * 100)
-    
-    return (lower, upper)
+def compute_confidence_interval(values: np.ndarray, ci: float = 0.95):
+    data = np.asarray(values, dtype=float)
+    if not len(data) or np.any(~np.isfinite(data)) or not (0 < ci < 1):
+        raise ValueError("Invalid confidence interval inputs")
+    q = (1-ci)/2
+    return tuple(map(float, np.quantile(data, [q, 1-q])))
