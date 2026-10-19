@@ -1,0 +1,33 @@
+name: AMCF Gate 0 contract checks
+
+on:
+  push:
+    branches: [fix/amcf-gate0-fail-closed-20261019]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gate0:
+    name: Syntax and fail-closed safety contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Minimal numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy>=1.24,<3" "scipy>=1.10,<2"
+      - name: Compile all repository Python sources (no imports)
+        run: python -m compileall -q amcf experiments tests setup.py
+      - name: Verify exact rare-event bound
+        run: python -m unittest discover -s tests -p 'test_rare_event_risk.py' -v
+      - name: Verify fail-closed safety contracts
+        run: python -m unittest discover -s tests -p 'test_gate0_safety_contract.py' -v
