@@ -13,7 +13,7 @@ class EpisodicMemory:
     Store and retrieve past incidents using hierarchical navigable small world indexing
     """
     
-    def __init__(self, embedding_dim: int = 768, max_elements: int = 10_000_000):
+    def __init__(self, embedding_dim: int = 384, max_elements: int = 10_000_000):
         self.embedding_dim = embedding_dim
         
         # HNSW index for fast retrieval
