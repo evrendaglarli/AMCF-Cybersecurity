@@ -3,10 +3,14 @@ Working Memory: Short-horizon event buffer
 Section 3.1 and Algorithm 1
 """
 
+from __future__ import annotations
+
 import numpy as np
 from collections import deque
-from typing import List, Tuple
-from ..core.metacognitive_controller import Event
+from typing import List, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..core.metacognitive_controller import Event
 
 class WorkingMemory:
     """

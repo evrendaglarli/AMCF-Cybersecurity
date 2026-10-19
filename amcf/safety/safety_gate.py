@@ -6,6 +6,7 @@ Section 4.2, Algorithm 4, Equations (13-14)
 import numpy as np
 from typing import Dict, List, Tuple
 from scipy.stats import pearsonr
+from .rare_event_risk import one_sided_binomial_upper
 
 
 class SafetyGate:
@@ -59,6 +60,23 @@ class SafetyGate:
         Returns:
             True if automation is authorized, False otherwise
         """
+        # Fail closed on malformed evidence; only a detector->probability map is valid.
+        if not isinstance(calibrated_probs, dict) or not calibrated_probs:
+            return False
+        # Reject NaN, infinities, strings, and out-of-range scores before the
+        # comparator; invalid evidence must never crash the safety decision.
+        if not isinstance(posterior, (int, float, np.floating)):
+            return False
+        if not np.isfinite(posterior) or not 0.0 <= posterior <= 1.0:
+            return False
+        for detector_id, probability in calibrated_probs.items():
+            if not isinstance(detector_id, str) or not detector_id:
+                return False
+            if not isinstance(probability, (int, float, np.floating)):
+                return False
+            if not np.isfinite(probability) or not 0.0 <= probability <= 1.0:
+                return False
+
         # Clause 1: Risk reduction threshold
         # Require high posterior confidence for automation
         if posterior < 0.80:
@@ -77,21 +95,16 @@ class SafetyGate:
     
     def _check_false_isolation_bound(self) -> bool:
         """
-        Check P(false isolation) ≤ ε using BCa 95% upper bound
-        Equation: CI^95_upper(P(false isolation)) ≤ ε = 10^-3
+        Check a conservative one-sided binomial upper confidence bound.
+        Small samples / no failures do NOT prove the 1e-3 risk target.
+        Assumes independently observed, accurately labeled outcomes.
         """
-        if len(self.false_isolation_window) < 30:
-            # Insufficient data, assume safe (conservative approach)
-            return True
-        
-        # Compute false isolation rate on rolling window
-        false_isolations = np.array(self.false_isolation_window[-self.window_size:])
-        rate = np.mean(false_isolations)
-        
-        # Bootstrap BCa 95% CI upper bound
-        upper_bound = self._bootstrap_upper_bound(false_isolations)
-        
-        # Gate: upper_bound must be ≤ ε
+        # Rare-event validation requires actual labeled outcomes. No outcomes or
+        # too few outcomes cannot establish a stringent 1e-3 upper-risk bound.
+        outcomes = self.false_isolation_window[-self.window_size:]
+        upper_bound = one_sided_binomial_upper(
+            failures=sum(outcomes), trials=len(outcomes), confidence=0.95
+        )
         return upper_bound <= self.epsilon
     
     def _check_dual_corroboration(self, calibrated_probs: Dict[str, float]) -> bool:
@@ -115,11 +128,8 @@ class SafetyGate:
         det1_id, prob1 = high_confidence_detectors[0]
         det2_id, prob2 = high_confidence_detectors[1]
         
-        # In full implementation, track correlation from history
-        # Here, simplified: assume detectors are decorrelated if different types
-        
-        # Compute logit-space correlation (placeholder)
-        # Real implementation would maintain rolling window of (logit(p_k), logit(p_ℓ)) pairs
+        # Correlation must already be measured on independent validation data.
+        # Missing estimates fail closed; assigning type-based priors is unsafe.
         correlation = self._estimate_detector_correlation(det1_id, det2_id)
         
         # Gate: correlation must be ≤ ρ_max
@@ -135,22 +145,9 @@ class SafetyGate:
         if key in self.correlation_history:
             return self.correlation_history[key]
         
-        # Heuristic: detectors of different types are less correlated
-        detector_types = {
-            'lightgbm': 'tree',
-            'tcn': 'neural',
-            'isolation_forest': 'unsupervised'
-        }
-        
-        type1 = detector_types.get(det1_id, 'unknown')
-        type2 = detector_types.get(det2_id, 'unknown')
-        
-        if type1 == type2:
-            correlation = 0.72  # Same type: higher correlation
-        else:
-            correlation = 0.60  # Different types: lower correlation
-        
-        return correlation
+        # An unmeasured correlation is NOT evidence of independence.
+        # Unknown dependence must deny automated action.
+        return 1.0
     
     def record_outcome(self, was_false_isolation: bool):
         """
@@ -164,32 +161,6 @@ class SafetyGate:
         # Keep window bounded
         if len(self.false_isolation_window) > self.window_size:
             self.false_isolation_window = self.false_isolation_window[-self.window_size:]
-    
-    def _bootstrap_upper_bound(self, data: np.ndarray, 
-                               n_bootstrap: int = 1000) -> float:
-        """
-        Compute BCa 95% CI upper bound for false isolation rate
-        
-        Args:
-            data: Binary array of false isolation outcomes
-            n_bootstrap: Number of bootstrap samples
-            
-        Returns:
-            97.5th percentile (upper bound of 95% CI)
-        """
-        bootstrap_means = []
-        
-        for _ in range(n_bootstrap):
-            # Resample with replacement
-            resample = np.random.choice(data, size=len(data), replace=True)
-            bootstrap_means.append(np.mean(resample))
-        
-        bootstrap_means = np.array(bootstrap_means)
-        
-        # 97.5th percentile for 95% CI upper bound
-        upper_bound = np.percentile(bootstrap_means, 97.5)
-        
-        return upper_bound
     
     def update_detector_thresholds(self, thresholds: Dict[str, float]):
         """Update per-detector thresholds after recalibration"""

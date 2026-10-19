@@ -2,7 +2,7 @@
 amcf_config:
   working_memory_size: 500
   min_working_memory_size: 100
-  embedding_dim: 768
+  embedding_dim: 384
   
   # Safety parameters
   rho_max: 0.75

@@ -8,7 +8,7 @@ setup(
     description='Adaptive Metacognitive Framework for Proactive Cyber Security',
     author='Evren Daglarli',
     author_email='daglarli@itu.edu.tr',
-    url='https://github.com/evrendaglarli/amcf-framework',
+    url='https://github.com/evrendaglarli/AMCF-Cybersecurity',
     license='MIT',
     packages=find_packages(),
     python_requires='>=3.9',
@@ -37,78 +37,3 @@ setup(
         'Topic :: Security',
     ],
 )
-```
-
-### `requirements.txt`
-```
-numpy==1.24.3
-pandas==2.0.3
-scipy==1.11.0
-scikit-learn==1.3.0
-lightgbm==4.0.0
-torch==2.0.1
-sentence-transformers==2.2.2
-hnswlib==0.7.0
-pyyaml==6.0
-matplotlib==3.7.2
-seaborn==0.12.2
-jupyter==1.0.0
-pytest==7.4.0
-pytest-cov==4.1.0
-```
-
-### `.gitignore`
-```
-# Byte-compiled
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Distribution
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Data
-data/raw/
-data/processed/*.pkl
-!data/processed/README.md
-
-# Results
-results/tables/*.csv
-results/figures/*.png
-results/*.log
-
-# Virtual env
-venv/
-ENV/
-env/
-
-# OS
-.DS_Store
-Thumbs.db
