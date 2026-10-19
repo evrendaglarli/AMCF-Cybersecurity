@@ -1,0 +1,42 @@
+name: R20 method-code contract checks
+
+on:
+  push:
+    branches: [fix/r20-method-code-alignment-20261020]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  methods:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install focused numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy>=1.24,<3" "scipy>=1.10,<2" "scikit-learn>=1.4,<2"
+      - name: Compile code
+        run: python -m compileall -q amcf experiments tests setup.py
+      - name: Run R20 method regressions
+        run: python -m unittest discover -s tests -p 'test_r20_method_contracts.py' -v
+      - name: Verify scientific limitations remain explicit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          a=Path('amcf/core/bayes_risk.py').read_text()
+          assert 'np.random.beta' not in a
+          b=Path('amcf/safety/enrichment_scheduler.py').read_text()
+          assert 'voi / cost' not in b
+          c=Path('amcf/utils/statistics.py').read_text()
+          assert 'method="BCa"' in c
+          assert '_delong_influences' in c
+          d=Path('README.md').read_text()
+          assert 'not currently a verified end-to-end reproduction' in d
+          PY
