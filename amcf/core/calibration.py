@@ -69,7 +69,7 @@ class TemperatureScaler:
 class CompetenceWeightManager:
     """
     Manage detector competence weights with EMA updates
-    Equation (2): w_{k,t+1} ← (1-λ)(w_{k,t} - η∇L_Brier) + λw_{k,t}
+    Equation (2): w_{k,t+1} = w_{k,t} - (1-λ)η ∇L_Brier
     """
     
     def __init__(self, num_detectors: int, lambda_ema: float = 0.96, 
@@ -89,24 +89,30 @@ class CompetenceWeightManager:
             detector_probs: (N, K) array of calibrated probabilities
             labels: (N,) array of binary labels
         """
-        # Compute Brier score gradient for each detector
-        N, K = detector_probs.shape
-        gradients = np.zeros(K)
-        
-        for k in range(K):
-            # Brier score: E[(p_k - y)^2]
-            brier_grad = 2 * np.mean(
-                (detector_probs[:, k] - labels) * detector_probs[:, k]
-            )
-            gradients[k] = brier_grad
-        
-        # EMA update with gradient step
-        new_weights = self.weights - self.learning_rate * gradients
-        self.weights = (1 - self.lambda_ema) * new_weights + self.lambda_ema * self.weights
-        
-        # Normalize and ensure positivity
-        self.weights = np.maximum(self.weights, 0.01)
-        self.weights /= self.weights.sum()
-    
+        # R20 Eq. (2): gradient of Brier loss of the *fused posterior*,
+        # not the independent detector scores.
+        probs = np.asarray(detector_probs, dtype=float)
+        labels = np.asarray(labels, dtype=float)
+        if (probs.ndim != 2 or probs.shape[1] != self.num_detectors or
+            len(probs) != len(labels) or len(labels) == 0 or
+            not np.all(np.isfinite(probs)) or
+            np.any((probs < 0) | (probs > 1)) or
+            not set(np.unique(labels)).issubset({0.0, 1.0})):
+            raise ValueError("Expected finite calibrated probabilities and binary labels")
+        p = np.clip(probs, 1e-7, 1 - 1e-7)
+        logits = np.log(p / (1.0 - p))
+        z = logits @ self.weights
+        fused = 1 / (1 + np.exp(-np.clip(z, -100, 100)))
+        gradients = np.mean(
+            (2 * (fused - labels) * fused * (1 - fused))[:, None] * logits,
+            axis=0
+        )
+        effective_lr = (1 - self.lambda_ema) * self.learning_rate
+        updated = self.weights - effective_lr * gradients
+        updated = np.maximum(updated, 0.0)
+        if not np.any(updated > 0):
+            updated[:] = 1.0
+        self.weights = updated / updated.sum()
+
     def get_weights(self) -> np.ndarray:
         return self.weights.copy()

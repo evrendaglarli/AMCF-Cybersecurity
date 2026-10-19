@@ -23,28 +23,32 @@ def compute_recall_at_budget(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def compute_ttc(events, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """Median incident containment time; no containment record means unavailable.
+
+    Requires each confirmed incident to have a stable incident_id and a
+    verified containment timestamp in event.attrs['containment_ts'] (ms).
+    A detection, escalation, or playbook recommendation is NOT containment.
     """
-    Compute median Time-To-Containment (minutes)
-    TTC = median time from first malicious event to containment action
-    """
-    ttcs = []
-    
-    incident_start = None
-    for i, (event, label, pred) in enumerate(zip(events, y_true, y_pred)):
-        if label == 1 and incident_start is None:
-            incident_start = event.ts
-        
-        # Containment: prediction changes from negative to positive
-        if incident_start is not None and pred == 1:
-            ttc_ms = event.ts - incident_start
-            ttc_min = ttc_ms / 1000 / 60  # Convert to minutes
-            ttcs.append(ttc_min)
-            incident_start = None
-    
-    if len(ttcs) == 0:
-        return 0.0
-    
-    return float(np.median(ttcs))
+    if len(events) != len(y_true) or len(events) != len(y_pred):
+        raise ValueError("Event/label/prediction lengths differ")
+    incidents = {}
+    for event, label in zip(events, y_true):
+        attrs = getattr(event, "attrs", {}) or {}
+        incident_id = attrs.get("incident_id")
+        if int(label) != 1 or not incident_id:
+            continue
+        rec = incidents.setdefault(str(incident_id), {"start": None, "end": None})
+        timestamp = getattr(event, "ts", None)
+        if timestamp is not None:
+            rec["start"] = int(timestamp) if rec["start"] is None else min(rec["start"], int(timestamp))
+        end = attrs.get("containment_ts")
+        if end is not None and attrs.get("containment_verified") is True:
+            rec["end"] = int(end)
+    durations = [(rec["end"] - rec["start"]) / 60000.0
+                 for rec in incidents.values()
+                 if rec["start"] is not None and rec["end"] is not None
+                 and rec["end"] >= rec["start"]]
+    return float(np.median(durations)) if durations else float("nan")
 
 
 def compute_escalation_precision(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -58,16 +62,38 @@ def compute_escalation_precision(y_true: np.ndarray, y_pred: np.ndarray) -> floa
     return float((y_true[esc_mask] == 1).sum()) / esc_mask.sum()
 
 
-def compute_long_dwell_recall(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def compute_long_dwell_recall(y_true: np.ndarray, y_pred: np.ndarray,
+                              events=None, min_stages: int = 2,
+                              min_dwell_ms: int = 3600_000) -> float:
+    """Incident-level multi-stage recall with verified labels and timestamps.
+
+    No incident identifiers or stage data => NaN (not ordinary flow recall).
+    An incident is detected if any of its labelled malicious events is alerted.
     """
-    Compute long-dwell (APT-chain) recall
-    Percentage of multi-stage attacks detected
-    """
-    dwell_mask = y_true == 1
-    if dwell_mask.sum() == 0:
-        return 0.0
-    
-    return float((y_pred[dwell_mask] == 1).sum()) / dwell_mask.sum()
+    if events is None:
+        return float("nan")
+    if len(events) != len(y_true) or len(events) != len(y_pred):
+        raise ValueError("Event/label/prediction lengths differ")
+    cases = {}
+    for event, label, predicted in zip(events, y_true, y_pred):
+        if int(label) != 1:
+            continue
+        attrs = getattr(event, "attrs", {}) or {}
+        incident_id = attrs.get("incident_id")
+        stage = attrs.get("attack_stage", attrs.get("tactic"))
+        if not incident_id or not stage:
+            continue
+        case = cases.setdefault(str(incident_id),
+                                {"stages": set(), "times": [], "found": False})
+        case["stages"].add(str(stage))
+        case["times"].append(int(event.ts))
+        case["found"] = case["found"] or bool(predicted)
+    qualifying = [case for case in cases.values()
+                  if len(case["stages"]) >= min_stages
+                  and max(case["times"]) - min(case["times"]) >= min_dwell_ms]
+    if not qualifying:
+        return float("nan")
+    return float(sum(case["found"] for case in qualifying) / len(qualifying))
 
 
 def compute_alerts_per_hour(events, y_pred: np.ndarray) -> float:
@@ -156,7 +182,7 @@ def compute_metrics_dict(y_true: np.ndarray, y_pred: np.ndarray,
     metrics = {
         'recall': compute_recall_at_budget(y_true, y_pred),
         'precision': compute_escalation_precision(y_true, y_pred),
-        'long_dwell_recall': compute_long_dwell_recall(y_true, y_pred),
+        'long_dwell_recall': compute_long_dwell_recall(y_true, y_pred, events=events),
         'roc_auc': compute_roc_auc(y_true, y_score),
         'pr_auc': compute_pr_auc(y_true, y_score),
         'ece': compute_expected_calibration_error(y_true, y_score)

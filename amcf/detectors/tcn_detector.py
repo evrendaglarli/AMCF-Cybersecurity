@@ -28,12 +28,14 @@ class TemporalConvNet(nn.Module):
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, x):
-        # x: (batch, seq_len, features)
+        # Require true ordered sequences; 2D flow records are not TCN data.
+        if x.ndim != 3 or x.shape[1] < 2:
+            raise ValueError("TCN requires (batch, sequence>=2, features) with temporal order")
         x = x.permute(0, 2, 1)  # (batch, features, seq_len)
         x = self.temporal_conv(x)
         x = x.mean(dim=2)  # Global average pooling
         x = self.fc(x)
-        return self.sigmoid(x).squeeze()
+        return self.sigmoid(x).squeeze(-1)
 
 
 class TCNDetector(BaseDetector):
@@ -51,6 +53,9 @@ class TCNDetector(BaseDetector):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
         criterion = nn.BCELoss()
         
+        if (np.asarray(X_train).ndim != 3 or np.asarray(X_val).ndim != 3
+            or np.asarray(X_train).shape[1] < 2 or np.asarray(X_val).shape[1] < 2):
+            raise ValueError("TCN training needs chronological 3D event sequences")
         # Convert to tensors
         X_train_t = torch.FloatTensor(X_train).to(self.device)
         y_train_t = torch.FloatTensor(y_train).to(self.device)
@@ -87,6 +92,8 @@ class TCNDetector(BaseDetector):
     
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """Return raw scores"""
+        if np.asarray(X).ndim != 3 or np.asarray(X).shape[1] < 2:
+            raise ValueError("TCN inference requires chronological 3D event sequences")
         self.model.eval()
         with torch.no_grad():
             X_t = torch.FloatTensor(X).to(self.device)
