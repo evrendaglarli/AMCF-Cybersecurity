@@ -122,6 +122,8 @@ class TestR20MethodContracts(unittest.TestCase):
         self.assertAlmostEqual(z, expected_z, places=10)
         self.assertAlmostEqual(p, 2 * norm.sf(abs(expected_z)), places=10)
         self.assertTrue(0 < p < .05)
+        _, tiny_p = paired_wald_newey_west_test(differences + .006, lag=7)
+        self.assertTrue(0 < tiny_p < 1e-5)
         adjusted, _ = holm_bonferroni_correction(
             np.array([p, .01, .12, .2, .031, .42])
         )
