@@ -124,7 +124,6 @@ def newey_west_se(residuals: np.ndarray, lag: int = 7) -> float:
     return float(np.sqrt(max(0.0, estimate) / n))
 
 
-
 def paired_wald_newey_west_test(
     paired_recall_differences: np.ndarray, lag: int = 7
 ) -> Tuple[float, float]:
