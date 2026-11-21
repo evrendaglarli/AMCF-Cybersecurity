@@ -24,7 +24,7 @@ from amcf.core.drift import DriftMonitor
 from amcf.core.calibration import CompetenceWeightManager
 from amcf.safety.enrichment_scheduler import EnrichmentScheduler
 from amcf.utils.statistics import (bootstrap_ci, delong_test, holm_bonferroni_correction,
-                                   newey_west_se)
+                                   newey_west_se, paired_wald_newey_west_test)
 from amcf.utils.metrics import compute_long_dwell_recall, compute_ttc
 
 
@@ -104,6 +104,41 @@ class TestR20MethodContracts(unittest.TestCase):
         self.assertTrue(np.allclose(q, [.04, .03, .04]))
         self.assertEqual(list(rejected), [True, True, True])
         self.assertAlmostEqual(newey_west_se(np.ones(100)), 0.)
+
+    def test_matched_daily_wald_z_with_seven_day_hac(self):
+        differences = np.array([
+            .06, -.02, .04, -.04, .01, .07, -.06, .03, .02, -.01,
+            -.02, .01, .07, -.03, .05, -.01, .04, -.05, .01, .03
+        ])
+        z, p = paired_wald_newey_west_test(differences, lag=7)
+        centred = differences - differences.mean()
+        n = len(differences)
+        hac_variance = np.dot(centred, centred) / n
+        for k in range(1, 8):
+            hac_variance += (2 * (1 - k / 8) *
+                             np.dot(centred[k:], centred[:-k]) / n)
+        expected_z = differences.mean() / np.sqrt(hac_variance / n)
+        from scipy.stats import norm
+        self.assertAlmostEqual(z, expected_z, places=10)
+        self.assertAlmostEqual(p, 2 * norm.sf(abs(expected_z)), places=10)
+        self.assertTrue(0 < p < .05)
+        _, tiny_p = paired_wald_newey_west_test(differences + .006, lag=7)
+        self.assertTrue(0 < tiny_p < 1e-5)
+        adjusted, _ = holm_bonferroni_correction(
+            np.array([p, .01, .12, .2, .031, .42])
+        )
+        self.assertEqual(len(adjusted), 6)
+        self.assertTrue(np.all((adjusted >= 0) & (adjusted <= 1)))
+
+    def test_matched_daily_wald_fails_closed_on_invalid_inputs(self):
+        with self.assertRaises(ValueError):
+            paired_wald_newey_west_test(np.ones(7) * .1, lag=7)
+        with self.assertRaises(ValueError):
+            paired_wald_newey_west_test(np.ones(12) * .1, lag=7)
+        with self.assertRaises(ValueError):
+            paired_wald_newey_west_test(np.array([.1] * 10 + [np.nan]), lag=7)
+        with self.assertRaises(ValueError):
+            paired_wald_newey_west_test(np.array([[.1] * 12]), lag=7)
 
     def test_incident_outcomes_do_not_equal_predictions(self):
         items = [Event(0, attrs={}), Event(7200_000, attrs={})]

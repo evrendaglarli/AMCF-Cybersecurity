@@ -124,6 +124,34 @@ def newey_west_se(residuals: np.ndarray, lag: int = 7) -> float:
     return float(np.sqrt(max(0.0, estimate) / n))
 
 
+def paired_wald_newey_west_test(
+    paired_recall_differences: np.ndarray, lag: int = 7
+) -> Tuple[float, float]:
+    """Two-sided paired Wald z-test on chronological Recall@B differences.
+
+    Each input is AMCF Recall@B minus a baseline's Recall@B for the SAME
+    daily evaluation block; blocks must be ordered and use matched data and
+    the same pre-specified operating budget. lag=7 means seven DAILY lags;
+    other time resolutions must explicitly choose their corresponding lag.
+
+    Returns (z statistic, raw two-sided p-value). Apply the existing
+    holm_bonferroni_correction to the six raw comparisons PER dataset.
+    This helper does not produce confidence intervals and cannot recreate
+    manuscript p-values without the original matched block results.
+    """
+    d = np.asarray(paired_recall_differences, dtype=float)
+    if (d.ndim != 1 or not isinstance(lag, (int, np.integer)) or lag < 0
+            or len(d) <= max(1, lag) or not np.all(np.isfinite(d))
+            or np.any(np.abs(d) > 1)):
+        raise ValueError("Require finite, chronological, matched daily recall differences and more blocks than lag")
+    se = newey_west_se(d, lag=lag)
+    if not np.isfinite(se) or se <= 0:
+        raise ValueError("Non-positive HAC standard error: Wald inference is not defined")
+    z = float(d.mean() / se)
+    p = float(2 * stats.norm.sf(abs(z)))
+    return z, p
+
+
 def compute_confidence_interval(values: np.ndarray, ci: float = 0.95):
     data = np.asarray(values, dtype=float)
     if not len(data) or np.any(~np.isfinite(data)) or not (0 < ci < 1):
