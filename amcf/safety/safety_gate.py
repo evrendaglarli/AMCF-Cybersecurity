@@ -6,7 +6,8 @@ Section 4.2, Algorithm 4, Equations (13-14)
 import numpy as np
 from typing import Dict, List, Tuple
 from scipy.stats import pearsonr
-from .rare_event_risk import one_sided_binomial_upper
+# The paper's 200-outcome bootstrap statistic is an operational monitor,
+# not a Clopper-Pearson certification of a 1e-3 rare-event failure rate.
 
 
 class SafetyGate:
@@ -85,7 +86,9 @@ class SafetyGate:
         if (1.0 - posterior) > self.epsilon:
             return False
         
-        # Clause 2: False isolation probability bound
+        # Operational false-isolation monitoring (200 confirmed outcomes,
+        # 97.5% of 1,000 bootstrap replicates). This is NOT a certification
+        # of the rare-event target; an unavailable monitor denies automation.
         if not self._check_false_isolation_bound():
             return False
         
@@ -138,20 +141,38 @@ class SafetyGate:
         # than the manuscript's explicitly *non-certifying* monitoring rule.
         return self.check(posterior, calibrated_probs)
 
-    def _check_false_isolation_bound(self) -> bool:
+    def false_isolation_monitor(self):
+        """v45 R3 Section 4.2: 200-outcome 97.5th percentile bootstrap.
+
+        Returns None when the validated labeled-outcome window is incomplete.
+        Bootstrap with zero observed failures gives zero and MUST NOT be
+        interpreted as validation of the nominal 1e-3 true failure rate.
         """
-        Check a conservative one-sided binomial upper confidence bound.
-        Small samples / no failures do NOT prove the 1e-3 risk target.
-        Assumes independently observed, accurately labeled outcomes.
-        """
-        # Rare-event validation requires actual labeled outcomes. No outcomes or
-        # too few outcomes cannot establish a stringent 1e-3 upper-risk bound.
         outcomes = self.false_isolation_window[-self.window_size:]
-        upper_bound = one_sided_binomial_upper(
-            failures=sum(outcomes), trials=len(outcomes), confidence=0.95
+        if len(outcomes) < self.window_size:
+            return None
+        values = np.asarray(outcomes, dtype=float)
+        if (values.shape != (self.window_size,) or
+                not np.all(np.isfinite(values)) or
+                np.any((values != 0.) & (values != 1.))):
+            return None
+        rng = np.random.default_rng(42)
+        # 1000 nonparametric bootstrap replicates, fixed on validation.
+        sample_indices = rng.integers(
+            0, self.window_size, size=(1000, self.window_size)
         )
-        return upper_bound <= self.epsilon
-    
+        proportions = values[sample_indices].mean(axis=1)
+        return float(np.quantile(proportions, 0.975))
+
+    def _check_false_isolation_bound(self) -> bool:
+        """Evaluate the non-certifying operational monitoring indicator.
+
+        This additional fail-closed operational rule is NOT a statistically
+        established upper confidence bound on the true false-isolation rate.
+        """
+        estimate = self.false_isolation_monitor()
+        return estimate is not None and estimate <= self.epsilon
+
     def _check_dual_corroboration(self, calibrated_probs: Dict[str, float]) -> bool:
         """
         Require two independent detectors above thresholds
