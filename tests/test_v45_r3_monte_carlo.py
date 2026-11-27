@@ -59,6 +59,20 @@ class TestV45R3MonteCarlo(unittest.TestCase):
         self.assertGreater(result.ci_halfwidth, 0.0)
         self.assertAlmostEqual(result.voi, baseline-expected-.1, delta=.6)
 
+    def test_rare_unobserved_outcome_not_false_convergence(self):
+        est = MonteCarloVoIEstimator(
+            self.calc, N_min=64, N_max=64,
+            tolerance=0.02, wall_clock_budget_ms=3000,
+            seed=42
+        )
+        est.register_outcome_model(
+            "rare", lambda **kw: [(1.0 - 1e-12, 0.1), (1e-12, 0.9)]
+        )
+        result = est.estimate_detailed(.5, .1, "rare")
+        self.assertEqual(result.samples, 64)
+        self.assertEqual(result.status, "maximum_samples")
+        self.assertEqual(result.ci_halfwidth, float("inf"))
+
     def test_malformed_distribution_rejected(self):
         est = MonteCarloVoIEstimator(self.calc)
         est.register_outcome_model("bad", lambda **kw: [(0.7, .5)])
