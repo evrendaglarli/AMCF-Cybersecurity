@@ -26,6 +26,25 @@ class TestV45R3Controller(unittest.TestCase):
         self.assertEqual(controller.voi_estimator.last_result.status,
                          "missing_outcome_model")
 
+    def test_gather_risk_from_single_counted_voi(self):
+        controller = TestControllerConsistency().new_controller()
+        from types import SimpleNamespace
+        from amcf.core.metacognitive_controller import Event
+        class KnownVoI:
+            last_result = SimpleNamespace(status="validated", ci_halfwidth=0.01)
+            def estimate_voi(self, posterior_before, enrichment_cost,
+                             enrichment_type, **kwargs):
+                return (2.0, 64) if enrichment_type == "edr_deep" else (0.0, 64)
+        controller.voi_estimator = KnownVoI()
+        event = Event(ts=1, src="host1", dst=None, kind="edr",
+                      attrs={}, detector_scores={"alpha":.8,"beta":.8})
+        action, risks, results = controller._reason(
+            event, .5, {"alpha":.8,"beta":.8})
+        primary = min(risks[k] for k in ("ignore","automate","escalate"))
+        self.assertAlmostEqual(risks["gather"], primary - 2.0)
+        self.assertEqual(action, "gather")
+        self.assertEqual(results["edr_deep"]["n_samples"], 64)
+
     def test_automation_without_validated_tau_fails_closed(self):
         controller = TestControllerConsistency().new_controller()
         from amcf.core.metacognitive_controller import Event
