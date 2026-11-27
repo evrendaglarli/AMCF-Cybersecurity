@@ -274,32 +274,46 @@ class MetacognitiveController:
             outcome['case_package'] = self._build_case_package(event, posterior, risks)
             
         elif action == 'automate':
-            # Safety gate check (Algorithm 4)
-            gate_passed = self.safety_gate.check(
-                posterior=posterior,
-                calibrated_probs=calibrated_probs,
-                asset_risk=1.0
+            # Select the concrete playbook BEFORE testing its action class.
+            # Algorithm 2's 'automate' is not itself an A_cond operation.
+            playbook_id = self.procedural_memory.select_playbook(
+                event, posterior, self.hypothesis_beliefs
             )
-            
-            if gate_passed:
-                # Select a candidate for analyst review ONLY. This research
-                # prototype has no governed SOAR connector, so it cannot
-                # perform the actual automation or claim containment.
-                playbook = self.procedural_memory.select_playbook(
-                    event, posterior, self.hypothesis_beliefs
-                )
-                outcome['playbook_selected'] = playbook
-                outcome['effective_action'] = 'escalate'
-                outcome['action'] = 'escalate'
-                outcome['case_package'] = self._build_case_package(event, posterior, risks)
-                outcome['status'] = 'escalated_no_actuation_connector'
+            get_playbook = getattr(self.procedural_memory, "get_playbook", None)
+            playbook = (get_playbook(playbook_id)
+                        if callable(get_playbook) else None)
+            action_class = getattr(playbook, "action_class", "unclassified")
+            outcome['playbook_selected'] = playbook_id
+            outcome['playbook_action_class'] = action_class
+
+            # v45 R3 specifies no numeric tau_risk. It must come from a
+            # validation-approved configuration, never a made-up default.
+            tau_risk = self.config.get("tau_risk")
+            if tau_risk is None:
+                allowed = False
+                outcome['gate_reason'] = 'missing_validation_risk_threshold'
             else:
-                # Downgrade to escalate
-                outcome['effective_action'] = 'escalate'
-                outcome['action'] = 'escalate'
-                outcome['case_package'] = self._build_case_package(event, posterior, risks)
-                outcome['status'] = 'escalated_from_failed_gate'
-                
+                allowed = self.safety_gate.check_endpoint_isolation(
+                    posterior=posterior,
+                    calibrated_probs=calibrated_probs,
+                    risk_by_action=risks,
+                    tau_risk=tau_risk,
+                    playbook_id=playbook_id,
+                    action_class=action_class,
+                )
+                outcome['gate_reason'] = ('all_reference_gates_passed'
+                                          if allowed else 'safety_gate_denied')
+
+            # Even when eligible, this package has NO governed SOAR execute,
+            # rollback, or credential connector. Report a proposal only.
+            outcome['effective_action'] = 'escalate'
+            outcome['action'] = 'escalate'
+            outcome['case_package'] = self._build_case_package(
+                event, posterior, risks
+            )
+            outcome['status'] = ('escalated_no_actuation_connector'
+                                 if allowed else 'escalated_from_failed_gate')
+
         elif action == 'escalate':
             # Package case for analyst
             case_package = self._build_case_package(event, posterior, risks)
