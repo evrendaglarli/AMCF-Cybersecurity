@@ -4,6 +4,14 @@ Reference code for the research manuscript **"Adaptive Metacognitive Framework f
 
 AMCF uses a Sense–Reason–Act control loop combining detector calibration and fusion, working/episodic/procedural memory, risk-aware decisions, evidence enrichment, and safety-gated escalation/response.
 
+## v45 R3 manuscript alignment and Reviewer R2.1 status
+
+See [v45 R3 equation-by-equation code mapping and reproducibility gaps](reports/V45_R3_ALIGNMENT_AND_R21_GAPS.md).
+
+**Current status: PARTIAL METHOD ALIGNMENT, NOT FULL EXPERIMENTAL REPRODUCTION.** The v45 R3 contract tests (`tests/test_v45_r3_contracts.py`) check selected algebraic decisions and the nominal endpoint-isolation posterior guard. They do not reproduce paper data, full baselines, Monte Carlo VoI, temporal-session confidence intervals, ablation studies, or enterprise outcomes.
+
+The existing R20 report below is a historical version-specific assessment, not evidence of v45 R3 numerical reproduction.
+
 ## R20 method/code consistency
 
 See [R20 implementation alignment and evidence limits](reports/R20_IMPLEMENTATION_ALIGNMENT.md) for a component-by-component mapping of paper equations and current code. This repository remains a **partial reference implementation**: matching methods does not establish reproduction of any original paper numerical findings.
