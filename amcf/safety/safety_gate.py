@@ -96,6 +96,48 @@ class SafetyGate:
         # All clauses satisfied
         return True
     
+    def check_endpoint_isolation(self, *, posterior: float,
+                                 calibrated_probs: Dict[str, float],
+                                 risk_by_action: Dict[str, float],
+                                 tau_risk: float,
+                                 playbook_id: str,
+                                 action_class: str) -> bool:
+        """Candidate-specific Eq. (13)-(14) gate for *endpoint isolation* only.
+
+        Algorithm 2's high-level 'automate' is not a concrete playbook class.
+        The caller must explicitly identify an endpoint-isolation playbook,
+        provide the current four action risks, and supply the validation-frozen
+        risk threshold. There is intentionally NO default tau_risk, since the
+        manuscript does not publish a numerical value for it.
+
+        Does not execute a SOAR playbook or certify a 1e-3 error frequency.
+        """
+        if action_class != "endpoint_isolation" or not playbook_id:
+            return False
+        if not isinstance(risk_by_action, dict):
+            return False
+        try:
+            values = {name: float(risk_by_action[name]) for name in
+                      ("ignore", "gather", "automate", "escalate")}
+            threshold = float(tau_risk)
+        except (KeyError, TypeError, ValueError):
+            return False
+        # Gather risk may be +inf when no validated enrichment outcome model
+        # is available. This must NOT be treated as a free candidate action.
+        if (not np.isfinite(threshold) or threshold < 0 or
+                any(np.isnan(v) or v < 0 for v in values.values()) or
+                any(not np.isfinite(values[k]) for k in
+                    ("ignore", "automate", "escalate"))):
+            return False
+        baseline = min(values[k] for k in ("ignore", "gather", "escalate"))
+        risk_reduction = baseline - values["automate"]
+        if not np.isfinite(risk_reduction) or risk_reduction < threshold:
+            return False
+        # Use the existing corroboration/dependence and conservative
+        # retrospectively monitored outcome gate. This remains stricter
+        # than the manuscript's explicitly *non-certifying* monitoring rule.
+        return self.check(posterior, calibrated_probs)
+
     def _check_false_isolation_bound(self) -> bool:
         """
         Check a conservative one-sided binomial upper confidence bound.
