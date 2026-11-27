@@ -77,9 +77,12 @@ class SafetyGate:
             if not np.isfinite(probability) or not 0.0 <= probability <= 1.0:
                 return False
 
-        # Clause 1: Risk reduction threshold
-        # Require high posterior confidence for automation
-        if posterior < 0.80:
+        # Equation (14), Section 4.2: nominal posterior criterion for
+        # candidate endpoint isolation (1 - pi_t <= epsilon). This is a
+        # model-based design gate, not an empirically certified failure rate.
+        # Independent corroboration and the additional conservative
+        # retrospective monitoring gate below remain unchanged.
+        if (1.0 - posterior) > self.epsilon:
             return False
         
         # Clause 2: False isolation probability bound
