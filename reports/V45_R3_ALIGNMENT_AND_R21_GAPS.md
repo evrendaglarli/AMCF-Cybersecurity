@@ -44,6 +44,12 @@ A matching equation or passing unit test establishes **method-level consistency 
 - `amcf/safety/safety_gate.py`: nominal posterior threshold now enforces `1 - pi <= epsilon` (v45 R3 Eq.14) instead of a generic 0.80 threshold. Other gates remain, so no unsafe broadening of the reference prototype's permission path.
 - `tests/test_v45_r3_contracts.py`: arithmetic and method checks for Eq. 2–3, Eq. 6–8, Eq. 10, Eq. 14, Eq. 15 and Section 7 boundaries. **Passing tests will not constitute reproduction of paper results.**
 
+## Artifact-provenance verification (additional guard, not reproduction)
+
+The script `experiments/verify_v45_r3_artifacts.py` accepts a JSON manifest with `manuscript_version: "v45 R3"` and an entry for each of CIC-IDS2017, CSE-CIC-IDS2018, and UNSW-NB15. Each entry requires an HTTPS `official_source`, an integer `seeds` list, and a dictionary of artifacts with `path` and lowercase `sha256`. Required roles: `raw_data`, `preprocessing`, `split_manifest`, `configuration`, `run_log`, `recall_table4`, `calibration`, `ablation`, `statistics`.
+
+Run `python experiments/verify_v45_r3_artifacts.py /path/to/authentic_manifest.json`. The command fails if files are missing or hashes differ and never unpickles or substitutes data. Even when all hashes pass, this is **artifact identity only**, not verification of model correctness, temporal leakage, CI computation, or manuscript result reproduction. Do not populate it with invented hashes or demo files.
+
 ## Acceptance rule
 
 **Do not label R2.1 CLOSED** until real, reproducible public-benchmark artifacts exist and an independently executed command produces documented outputs that match the paper, with expected tolerances and uncertainty analysis. If source artifacts are absent, report the gap; do not fabricate class labels, time stamps, confidence intervals, containment outcomes, Figure 5 bins, or matching numbers. Preserve `main` until the review branch has passed validation.
