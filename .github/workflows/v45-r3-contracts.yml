@@ -26,9 +26,12 @@ jobs:
         run: |
           python -m py_compile amcf/core/calibration.py amcf/core/bayes_risk.py amcf/core/fusion.py
           python -m py_compile amcf/safety/safety_gate.py amcf/safety/enrichment_scheduler.py
-          python -m py_compile tests/test_v45_r3_contracts.py
+          python -m py_compile tests/test_v45_r3_contracts.py tests/test_v45_r3_monte_carlo.py
+          python -m py_compile amcf/core/monte_carlo_voi.py amcf/core/metacognitive_controller.py
       - name: Run v45 R3 algebraic contracts
-        run: python -m unittest discover -s tests -p 'test_v45_r3_contracts.py' -v
+        run: |
+          python -m unittest discover -s tests -p 'test_v45_r3_contracts.py' -v
+          python -m unittest discover -s tests -p 'test_v45_r3_monte_carlo.py' -v
       - name: Verify reproducibility disclaimer
         run: |
           python - <<'PY'
