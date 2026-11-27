@@ -209,3 +209,9 @@ __marimo__/
 # UNSW-NB15 pilot: keep third-party raw files and derived outputs out of git
 data/raw/unsw_nb15/
 results/feasibility/
+
+# Local v45 R3 decision snapshots/feedback may contain sensitive context
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+data/state/

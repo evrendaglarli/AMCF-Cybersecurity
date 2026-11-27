@@ -6,7 +6,8 @@ Section 4.2, Algorithm 4, Equations (13-14)
 import numpy as np
 from typing import Dict, List, Tuple
 from scipy.stats import pearsonr
-from .rare_event_risk import one_sided_binomial_upper
+# The paper's 200-outcome bootstrap statistic is an operational monitor,
+# not a Clopper-Pearson certification of a 1e-3 rare-event failure rate.
 
 
 class SafetyGate:
@@ -77,12 +78,17 @@ class SafetyGate:
             if not np.isfinite(probability) or not 0.0 <= probability <= 1.0:
                 return False
 
-        # Clause 1: Risk reduction threshold
-        # Require high posterior confidence for automation
-        if posterior < 0.80:
+        # Equation (14), Section 4.2: nominal posterior criterion for
+        # candidate endpoint isolation (1 - pi_t <= epsilon). This is a
+        # model-based design gate, not an empirically certified failure rate.
+        # Independent corroboration and the additional conservative
+        # retrospective monitoring gate below remain unchanged.
+        if (1.0 - posterior) > self.epsilon:
             return False
         
-        # Clause 2: False isolation probability bound
+        # Operational false-isolation monitoring (200 confirmed outcomes,
+        # 97.5% of 1,000 bootstrap replicates). This is NOT a certification
+        # of the rare-event target; an unavailable monitor denies automation.
         if not self._check_false_isolation_bound():
             return False
         
@@ -93,20 +99,80 @@ class SafetyGate:
         # All clauses satisfied
         return True
     
-    def _check_false_isolation_bound(self) -> bool:
+    def check_endpoint_isolation(self, *, posterior: float,
+                                 calibrated_probs: Dict[str, float],
+                                 risk_by_action: Dict[str, float],
+                                 tau_risk: float,
+                                 playbook_id: str,
+                                 action_class: str) -> bool:
+        """Candidate-specific Eq. (13)-(14) gate for *endpoint isolation* only.
+
+        Algorithm 2's high-level 'automate' is not a concrete playbook class.
+        The caller must explicitly identify an endpoint-isolation playbook,
+        provide the current four action risks, and supply the validation-frozen
+        risk threshold. There is intentionally NO default tau_risk, since the
+        manuscript does not publish a numerical value for it.
+
+        Does not execute a SOAR playbook or certify a 1e-3 error frequency.
         """
-        Check a conservative one-sided binomial upper confidence bound.
-        Small samples / no failures do NOT prove the 1e-3 risk target.
-        Assumes independently observed, accurately labeled outcomes.
+        if action_class != "endpoint_isolation" or not playbook_id:
+            return False
+        if not isinstance(risk_by_action, dict):
+            return False
+        try:
+            values = {name: float(risk_by_action[name]) for name in
+                      ("ignore", "gather", "automate", "escalate")}
+            threshold = float(tau_risk)
+        except (KeyError, TypeError, ValueError):
+            return False
+        # Gather risk may be +inf when no validated enrichment outcome model
+        # is available. This must NOT be treated as a free candidate action.
+        if (not np.isfinite(threshold) or threshold < 0 or
+                any(np.isnan(v) or v < 0 for v in values.values()) or
+                any(not np.isfinite(values[k]) for k in
+                    ("ignore", "automate", "escalate"))):
+            return False
+        baseline = min(values[k] for k in ("ignore", "gather", "escalate"))
+        risk_reduction = baseline - values["automate"]
+        if not np.isfinite(risk_reduction) or risk_reduction < threshold:
+            return False
+        # Use the existing corroboration/dependence and conservative
+        # retrospectively monitored outcome gate. This remains stricter
+        # than the manuscript's explicitly *non-certifying* monitoring rule.
+        return self.check(posterior, calibrated_probs)
+
+    def false_isolation_monitor(self):
+        """v45 R3 Section 4.2: 200-outcome 97.5th percentile bootstrap.
+
+        Returns None when the validated labeled-outcome window is incomplete.
+        Bootstrap with zero observed failures gives zero and MUST NOT be
+        interpreted as validation of the nominal 1e-3 true failure rate.
         """
-        # Rare-event validation requires actual labeled outcomes. No outcomes or
-        # too few outcomes cannot establish a stringent 1e-3 upper-risk bound.
         outcomes = self.false_isolation_window[-self.window_size:]
-        upper_bound = one_sided_binomial_upper(
-            failures=sum(outcomes), trials=len(outcomes), confidence=0.95
+        if len(outcomes) < self.window_size:
+            return None
+        values = np.asarray(outcomes, dtype=float)
+        if (values.shape != (self.window_size,) or
+                not np.all(np.isfinite(values)) or
+                np.any((values != 0.) & (values != 1.))):
+            return None
+        rng = np.random.default_rng(42)
+        # 1000 nonparametric bootstrap replicates, fixed on validation.
+        sample_indices = rng.integers(
+            0, self.window_size, size=(1000, self.window_size)
         )
-        return upper_bound <= self.epsilon
-    
+        proportions = values[sample_indices].mean(axis=1)
+        return float(np.quantile(proportions, 0.975))
+
+    def _check_false_isolation_bound(self) -> bool:
+        """Evaluate the non-certifying operational monitoring indicator.
+
+        This additional fail-closed operational rule is NOT a statistically
+        established upper confidence bound on the true false-isolation rate.
+        """
+        estimate = self.false_isolation_monitor()
+        return estimate is not None and estimate <= self.epsilon
+
     def _check_dual_corroboration(self, calibrated_probs: Dict[str, float]) -> bool:
         """
         Require two independent detectors above thresholds

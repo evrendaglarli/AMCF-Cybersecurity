@@ -116,3 +116,38 @@ class CompetenceWeightManager:
 
     def get_weights(self) -> np.ndarray:
         return self.weights.copy()
+
+def fit_confirmed_temperature(scores, labels, *, rho: float = 1.0,
+                              initial: float = 1.0) -> float:
+    """Positive-temperature NLL over a verified rolling context window (Eq. 1).
+
+    rho=1 exactly recovers the unweighted 200-context negative log-likelihood;
+    0<rho<1 gives explicitly specified exponential forgetting. Neither
+    implementation claims a historical fitted rho was publicly released.
+    """
+    from scipy.optimize import minimize_scalar
+    x = np.asarray(scores, dtype=float)
+    y = np.asarray(labels, dtype=float)
+    if (x.shape != (200,) or y.shape != (200,) or
+            not np.all(np.isfinite(x)) or
+            not set(np.unique(y)).issubset({0., 1.}) or
+            len(np.unique(y)) != 2 or not 0 < rho <= 1 or
+            not np.isfinite(initial) or initial <= 0):
+        raise ValueError("200 finite, class-enriched verified samples required")
+    weights = np.power(float(rho), np.arange(199, -1, -1, dtype=float))
+    weights /= weights.sum()
+
+    def objective(log_t):
+        t = np.exp(log_t)  # T > 0 by construction
+        z = x / t
+        # Stable Bernoulli NLL: log(1+exp(z)) - y*z
+        return float(np.dot(weights, np.logaddexp(0., z) - y*z))
+
+    # Bounded log search guards numeric overflow; the bound is a declared
+    # *reference implementation* guard, not a published trial parameter.
+    result = minimize_scalar(objective, method="bounded",
+                             bounds=(-10., 10.),
+                             options={"xatol": 1e-10})
+    if not result.success or not np.isfinite(result.fun):
+        raise ArithmeticError("Confirmed calibration optimization failed")
+    return float(np.exp(result.x))

@@ -18,6 +18,9 @@ class Playbook:
     cost_model: Dict[str, float]
     rollback_procedure: Optional[str] = None
     version: str = "1.0"
+    # Explicit concrete action class; never infer from the high-level
+    # 'automate' decision or from a playbook display name.
+    action_class: str = "unclassified"
 
 class ProceduralMemory:
     """
@@ -55,7 +58,8 @@ class ProceduralMemory:
                 'C_SE': 1.2,
                 'estimated_user_impact': 'high'
             },
-            rollback_procedure='restore_network_policy_v1.1'
+            rollback_procedure='restore_network_policy_v1.1',
+            action_class='endpoint_isolation'
         )
         
         # Playbook 2: Kill Process
