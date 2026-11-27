@@ -66,6 +66,28 @@ class TestV45R3MonteCarlo(unittest.TestCase):
             est.estimate_voi(.5, .1, "bad")
 
 
+class TestV45R3SafetyMonitoring(unittest.TestCase):
+    def test_monitor_requires_200_confirmed_outcomes(self):
+        gate = SafetyGate(window_size=200)
+        self.assertIsNone(gate.false_isolation_monitor())
+        for _ in range(199):
+            gate.record_outcome(False)
+        self.assertIsNone(gate.false_isolation_monitor())
+        self.assertFalse(gate._check_false_isolation_bound())
+
+    def test_bootstrap_is_noncertifying_monitor(self):
+        gate = SafetyGate(window_size=200, epsilon=1e-3)
+        for _ in range(200):
+            gate.record_outcome(False)
+        self.assertEqual(gate.false_isolation_monitor(), 0.0)
+        self.assertTrue(gate._check_false_isolation_bound())
+        # A zero observed/bootstrap rate is NOT a confidence certificate
+        # that the real false-isolation probability is below 1e-3.
+        gate.record_outcome(True)
+        self.assertGreater(gate.false_isolation_monitor(), 0.001)
+        self.assertFalse(gate._check_false_isolation_bound())
+
+
 class TestV45R3ActionRisk(unittest.TestCase):
     class VerifiedInputsOnlyGate(SafetyGate):
         """Isolate action-specific Eq. (13) test; NOT an actual admission gate."""
