@@ -239,7 +239,20 @@ class MetacognitiveController:
         # No drift signal is fabricated when such evidence is unavailable.
         
         # Step 5-6: Decision policy
-        voi_positive = any(v['voi'] > 0 for v in voi_results.values())
+        # Only a positive, budget-feasible conditional query can compete.
+        # Eq. (10): R_gather(e) = min_primary_risk - VoI(e), with the
+        # enrichment cost already subtracted ONCE inside VoI.
+        # When no validated query model is available gather stays +inf.
+        budget = self.enrichment_scheduler.budget
+        feasible_voi = [
+            v['voi'] for v in voi_results.values()
+            if v['voi'] > 0 and 0 < v['cost'] <= budget
+        ]
+        voi_positive = bool(feasible_voi)
+        if voi_positive:
+            primary_baseline = min(risks[k] for k in
+                                   ("ignore", "automate", "escalate"))
+            risks["gather"] = primary_baseline - max(feasible_voi)
         high_uncertainty = self._is_high_uncertainty(posterior)
         
         action = self.risk_calc.select_action(risks, voi_positive, high_uncertainty)
