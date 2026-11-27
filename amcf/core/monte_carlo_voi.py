@@ -125,7 +125,11 @@ class MonteCarloVoIEstimator:
             arr = np.asarray(observations, dtype=float)
             halfwidth = None
             if np.all(arr == arr[0]):
-                halfwidth = 0.0
+                # Identical draws are NOT proof of zero uncertainty when the
+                # validated conditional model contains unobserved outcomes
+                # with different downstream risks.
+                halfwidth = (0.0 if np.all(outcome_risks == outcome_risks[0])
+                             else float("inf"))
             else:
                 # BCa of the post-enrichment minimum Bayes risk (paper Section 3.1).
                 # Bootstrap is not cost-free: explicitly account for its wall time.
@@ -135,6 +139,9 @@ class MonteCarloVoIEstimator:
                     random_state=np.random.default_rng(self.seed + len(arr))
                 ).confidence_interval
                 halfwidth = float((ci.high - ci.low) / 2)
+                if not np.isfinite(halfwidth):
+                    # BCa failure cannot masquerade as convergence.
+                    halfwidth = float("inf")
             elapsed_ms = (perf_counter() - started) * 1000
             if elapsed_ms >= self.budget_ms:
                 result = MonteCarloVoIResult(0., len(observations), halfwidth,
