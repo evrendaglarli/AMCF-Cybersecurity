@@ -19,6 +19,10 @@ def _jsonable(obj: Any) -> Any:
         return {str(k): _jsonable(v) for k,v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_jsonable(x) for x in obj]
+    # Numpy vectors may occur in normalized event features; serialize their
+    # values deterministically rather than failing on ndarray.item().
+    if hasattr(obj, "tolist") and callable(obj.tolist):
+        return _jsonable(obj.tolist())
     if hasattr(obj, "item") and callable(obj.item):
         return _jsonable(obj.item())
     if isinstance(obj, float):
