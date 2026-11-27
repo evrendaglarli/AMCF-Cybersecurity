@@ -8,7 +8,7 @@ AMCF uses a Sense–Reason–Act control loop combining detector calibration and
 
 See [v45 R3 equation-by-equation code mapping and reproducibility gaps](reports/V45_R3_ALIGNMENT_AND_R21_GAPS.md).
 
-**Current status: PARTIAL METHOD ALIGNMENT, NOT FULL EXPERIMENTAL REPRODUCTION.** The v45 R3 contract tests (`tests/test_v45_r3_contracts.py`) check selected algebraic decisions and the nominal endpoint-isolation posterior guard. They do not reproduce paper data, full baselines, Monte Carlo VoI, temporal-session confidence intervals, ablation studies, or enterprise outcomes.
+**Current status: PARTIAL METHOD ALIGNMENT, NOT FULL EXPERIMENTAL REPRODUCTION.** The v45 R3 contract tests (`tests/test_v45_r3_contracts.py`, `tests/test_v45_r3_monte_carlo.py`, and `tests/test_v45_r3_controller.py`) cover selected equations, the new adaptive Monte Carlo VoI implementation, and a playbook-specific reference safety gate. The implementation still has **no validated historical enrichment outcome distributions, no deployed SOAR connector, and no source artifacts for the full benchmark results**. The tests therefore do not reproduce paper data, full baselines, temporal-session confidence intervals, ablations, or enterprise outcomes.
 
 The existing R20 report below is a historical version-specific assessment, not evidence of v45 R3 numerical reproduction.
 
