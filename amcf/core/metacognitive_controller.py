@@ -392,14 +392,13 @@ class MetacognitiveController:
         return 'low'
     
     def _get_enrichment_cost(self, enrichment_type: str) -> float:
-        """Get cost for enrichment type (Equation 9)"""
-        costs = {
-            'edr_deep': 5.0,
-            'sandbox': 15.0,
-            'pcap': 8.0,
-            'memory_dump': 20.0
-        }
-        return costs.get(enrichment_type, 10.0)
+        """Use the SAME validated resource-cost input for VoI and Eq. (15).
+
+        The scheduler's current numbers are reference placeholders, not a
+        demonstrated implementation of Eq. (9)'s empirical byte/CPU/latency
+        coefficients or the manuscript's actual experimental query costs.
+        """
+        return self.enrichment_scheduler.get_enrichment_cost(enrichment_type)
     
     def _is_high_uncertainty(self, posterior: float, threshold: float = 0.3) -> bool:
         """Check if uncertainty is high (posterior near 0.5)"""
