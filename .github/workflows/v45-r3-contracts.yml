@@ -1,0 +1,39 @@
+name: v45 R3 mathematical contract checks
+
+on:
+  push:
+    branches: [audit/v45-r3-reproducibility]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  equation-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install mathematical dependencies only
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy>=1.24,<3" "scipy>=1.10,<2"
+      - name: Compile relevant modules
+        run: |
+          python -m py_compile amcf/core/calibration.py amcf/core/bayes_risk.py amcf/core/fusion.py
+          python -m py_compile amcf/safety/safety_gate.py amcf/safety/enrichment_scheduler.py
+          python -m py_compile tests/test_v45_r3_contracts.py
+      - name: Run v45 R3 algebraic contracts
+        run: python -m unittest discover -s tests -p 'test_v45_r3_contracts.py' -v
+      - name: Verify reproducibility disclaimer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path("reports/V45_R3_ALIGNMENT_AND_R21_GAPS.md").read_text()
+          assert "NOT FULL EXPERIMENTAL REPRODUCTION" in Path("README.md").read_text()
+          assert "Do not label R2.1 CLOSED" in text
+          PY
