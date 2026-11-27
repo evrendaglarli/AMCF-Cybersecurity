@@ -12,6 +12,41 @@ See [v45 R3 equation-by-equation code mapping and reproducibility gaps](reports/
 
 The existing R20 report below is a historical version-specific assessment, not evidence of v45 R3 numerical reproduction.
 
+## v45 R3 DecisionID / Algorithm 6 feedback contract
+
+The reference controller now creates a canonical SHA-256 `DecisionID` and
+records the corresponding decision snapshot **before** invoking ACT. Its
+`ingest_confirmed_feedback(decision_id, outcome, source=..., available_at_ms=...)`
+entrypoint accepts only causally available confirmed `TP`/`FP` labels,
+rejects duplicates and unverified sources, and restores confirmed calibration
+and advisor weights after a restart. The 200-context calibration window requires
+both positive and negative confirmed labels. An ordinary `Event.label` is not
+accepted as instant confirmed feedback.
+
+For a **persistent local reference ledger**, explicitly set
+`amcf_config.decision_ledger_path` to a protected SQLite file path, for example
+`data/state/decisions.sqlite3`, and keep it out of Git. The default
+`:memory:` is ephemeral/test-only, **not** a durable production audit. The
+`amcf_config.feedback_forgetting_rho` parameter is in `(0,1]`; its
+default of 1 means no forgetting and **is not** an authenticated fitted value
+from the historical study. Configure it only with documented validation
+evidence. The local hash chain is tamper-evident within its stored history, not
+external append-only/WORM certification or a substitute for an enterprise SOC
+audit service.
+
+Example after `process_event(event)` returns metadata containing `DecisionID`:
+
+```python
+result = controller.ingest_confirmed_feedback(
+    metadata["DecisionID"], "TP",
+    source="analyst_confirmed", available_at_ms=verified_label_time_ms
+)
+```
+
+The original public-benchmark scoring artifacts, chronological label-availability
+records and experiment configurations remain required for R2.1. These method
+tests do not claim to regenerate Table 4 or restricted enterprise outcomes.
+
 ## R20 method/code consistency
 
 See [R20 implementation alignment and evidence limits](reports/R20_IMPLEMENTATION_ALIGNMENT.md) for a component-by-component mapping of paper equations and current code. This repository remains a **partial reference implementation**: matching methods does not establish reproduction of any original paper numerical findings.
