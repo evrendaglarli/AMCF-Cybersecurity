@@ -39,6 +39,15 @@ class TestLedger(unittest.TestCase):
             self.assertTrue(ledger.verify_chain())
             ledger.close()
 
+    def test_numpy_vector_fingerprint_is_canonical(self):
+        # A multi-element feature vector must not invoke ndarray.item().
+        value={"event_ts_ms":1, "features":np.asarray([0.1,0.2])}
+        d=DecisionLedger()
+        identifier=d.record(value)
+        self.assertEqual(d.read(identifier)["features"],[0.1,0.2])
+        self.assertTrue(d.verify_chain())
+        d.close()
+
     def test_feedback_time_duplicate_and_source_guard(self):
         ledger=DecisionLedger()
         d=ledger.record({"event_ts_ms":1000,"posterior":.8})
