@@ -14,6 +14,7 @@ from .fusion import LogitWeightedFusion
 from .hypotheses import HypothesisTracker
 from .drift import DriftMonitor
 from .bayes_risk import BayesRiskCalculator, ValueOfInformationEstimator, CostModel
+from .monte_carlo_voi import MonteCarloVoIEstimator
 from ..memory import WorkingMemory, EpisodicMemory, ProceduralMemory
 from ..safety import SafetyGate, EnrichmentScheduler
 
@@ -55,7 +56,18 @@ class MetacognitiveController:
         
         # Risk and VoI
         self.risk_calc = BayesRiskCalculator(cost_model)
-        self.voi_estimator = ValueOfInformationEstimator(self.risk_calc)
+        # v45 R3 Section 3.1: adaptive conditional Monte Carlo VoI.
+        # With no historically validated outcome model the estimator returns
+        # zero recommendation rather than simulating posterior movement.
+        voi_config = config.get("voi_estimation", {})
+        self.voi_estimator = MonteCarloVoIEstimator(
+            self.risk_calc,
+            N_min=int(voi_config.get("N_min", 64)),
+            N_max=int(voi_config.get("N_max", 4096)),
+            tolerance=float(voi_config.get("tolerance", 0.02)),
+            wall_clock_budget_ms=float(voi_config.get("wall_clock_budget_ms", 150)),
+            seed=int(voi_config.get("seed", 42)),
+        )
         
         # Memory systems
         self.working_memory = WorkingMemory(max_size=config.get('working_memory_size', 500))
@@ -218,7 +230,9 @@ class MetacognitiveController:
                 severity=severity
             )
             voi_results[enrich_type] = {
-                'voi': voi, 'n_samples': n_samples, 'cost': enrich_cost
+                'voi': voi, 'n_samples': n_samples, 'cost': enrich_cost,
+                'status': self.voi_estimator.last_result.status,
+                'ci_halfwidth': self.voi_estimator.last_result.ci_halfwidth,
             }
         
         # Drift requires a validated reference stream and delayed labels.
