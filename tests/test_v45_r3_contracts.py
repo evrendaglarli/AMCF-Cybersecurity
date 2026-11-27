@@ -3,8 +3,25 @@
 These test algebra/nominal guards, not the paper's results tables or actual SOAR.
 """
 import math
+import sys
+import types
 import unittest
+from pathlib import Path
+
 import numpy as np
+
+# Import the small mathematical modules without loading unrelated optional
+# heavyweight integrations from the top-level amcf package.
+ROOT = Path(__file__).resolve().parents[1]
+for name, relative in [
+    ("amcf", "amcf"), ("amcf.core", "amcf/core"),
+    ("amcf.safety", "amcf/safety")
+]:
+    if name not in sys.modules:
+        namespace = types.ModuleType(name)
+        namespace.__path__ = [str(ROOT / relative)]
+        sys.modules[name] = namespace
+
 from amcf.core.bayes_risk import BayesRiskCalculator, CostModel, ValueOfInformationEstimator
 from amcf.core.fusion import LogitWeightedFusion
 from amcf.core.calibration import CompetenceWeightManager
